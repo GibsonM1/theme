@@ -1,5 +1,7 @@
 /* =====================================================================
    Mr. Gibson class interactives: shared theme, version 1
+   Accent is purple on purpose: red/pink = positive charge and blue = negative charge in class,
+   so neither is used for buttons or highlights. Green = correct. Amber = hints.
    Material 3 tokens and base components in plain CSS.
    Linked by every class interactive from https://gibsonm1.github.io/theme/theme-v1.css
    If a change would break older games, copy this file to theme-v2.css instead of editing it.
@@ -17,14 +19,14 @@
 :root {
   color-scheme: light dark;
   /* ---- color roles (light) ---- */
-  --md-sys-color-primary: #2b5ea7;
+  --md-sys-color-primary: #6750a4;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #d6e3ff;
-  --md-sys-color-on-primary-container: #001b3e;
-  --md-sys-color-secondary: #555f71;
+  --md-sys-color-primary-container: #eaddff;
+  --md-sys-color-on-primary-container: #21005d;
+  --md-sys-color-secondary: #625b71;
   --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #d9e3f8;
-  --md-sys-color-on-secondary-container: #121c2b;
+  --md-sys-color-secondary-container: #e8def8;
+  --md-sys-color-on-secondary-container: #1d192b;
   --md-sys-color-tertiary: #845400;
   --md-sys-color-on-tertiary: #ffffff;
   --md-sys-color-tertiary-container: #ffddb5;
@@ -33,20 +35,20 @@
   --md-sys-color-on-error: #ffffff;
   --md-sys-color-error-container: #ffdad6;
   --md-sys-color-on-error-container: #410002;
-  --md-sys-color-surface: #f8f9ff;
-  --md-sys-color-on-surface: #191c20;
-  --md-sys-color-surface-variant: #e0e2ec;
-  --md-sys-color-on-surface-variant: #43474e;
+  --md-sys-color-surface: #fef7ff;
+  --md-sys-color-on-surface: #1d1b20;
+  --md-sys-color-surface-variant: #e7e0ec;
+  --md-sys-color-on-surface-variant: #49454f;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #f2f3fa;
-  --md-sys-color-surface-container: #eceef4;
-  --md-sys-color-surface-container-high: #e6e8ee;
-  --md-sys-color-surface-container-highest: #e1e2e8;
-  --md-sys-color-outline: #73777f;
-  --md-sys-color-outline-variant: #c3c6cf;
-  --md-sys-color-inverse-surface: #2e3036;
-  --md-sys-color-inverse-on-surface: #eff0f7;
-  --md-sys-color-inverse-primary: #a8c8ff;
+  --md-sys-color-surface-container-low: #f7f2fa;
+  --md-sys-color-surface-container: #f3edf7;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #cac4d0;
+  --md-sys-color-inverse-surface: #322f35;
+  --md-sys-color-inverse-on-surface: #f5eff7;
+  --md-sys-color-inverse-primary: #d0bcff;
   /* extended role: success (M3 has none built in) */
   --app-color-success: #1f6d3b;
   --app-color-on-success: #ffffff;
@@ -81,14 +83,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --md-sys-color-primary: #a8c8ff;
-    --md-sys-color-on-primary: #003063;
-    --md-sys-color-primary-container: #0e4787;
-    --md-sys-color-on-primary-container: #d6e3ff;
-    --md-sys-color-secondary: #bdc7dc;
-    --md-sys-color-on-secondary: #273141;
-    --md-sys-color-secondary-container: #3d4758;
-    --md-sys-color-on-secondary-container: #d9e3f8;
+    --md-sys-color-primary: #d0bcff;
+    --md-sys-color-on-primary: #381e72;
+    --md-sys-color-primary-container: #4f378b;
+    --md-sys-color-on-primary-container: #eaddff;
+    --md-sys-color-secondary: #ccc2dc;
+    --md-sys-color-on-secondary: #332d41;
+    --md-sys-color-secondary-container: #4a4458;
+    --md-sys-color-on-secondary-container: #e8def8;
     --md-sys-color-tertiary: #fbbb68;
     --md-sys-color-on-tertiary: #472a00;
     --md-sys-color-tertiary-container: #653e00;
@@ -97,20 +99,20 @@
     --md-sys-color-on-error: #690005;
     --md-sys-color-error-container: #93000a;
     --md-sys-color-on-error-container: #ffdad6;
-    --md-sys-color-surface: #111318;
-    --md-sys-color-on-surface: #e1e2e9;
-    --md-sys-color-surface-variant: #43474e;
-    --md-sys-color-on-surface-variant: #c3c6cf;
-    --md-sys-color-surface-container-lowest: #0c0e13;
-    --md-sys-color-surface-container-low: #191c20;
-    --md-sys-color-surface-container: #1d2024;
-    --md-sys-color-surface-container-high: #282a2f;
-    --md-sys-color-surface-container-highest: #33353a;
-    --md-sys-color-outline: #8d9199;
-    --md-sys-color-outline-variant: #43474e;
-    --md-sys-color-inverse-surface: #e1e2e9;
-    --md-sys-color-inverse-on-surface: #2e3036;
-    --md-sys-color-inverse-primary: #2b5ea7;
+    --md-sys-color-surface: #141218;
+    --md-sys-color-on-surface: #e6e0e9;
+    --md-sys-color-surface-variant: #49454f;
+    --md-sys-color-on-surface-variant: #cac4d0;
+    --md-sys-color-surface-container-lowest: #0f0d13;
+    --md-sys-color-surface-container-low: #1d1b20;
+    --md-sys-color-surface-container: #211f26;
+    --md-sys-color-surface-container-high: #2b2930;
+    --md-sys-color-surface-container-highest: #36343b;
+    --md-sys-color-outline: #938f99;
+    --md-sys-color-outline-variant: #49454f;
+    --md-sys-color-inverse-surface: #e6e0e9;
+    --md-sys-color-inverse-on-surface: #322f35;
+    --md-sys-color-inverse-primary: #6750a4;
     --app-color-success: #8fd89b;
     --app-color-on-success: #00391a;
     --app-color-success-container: #00522a;
