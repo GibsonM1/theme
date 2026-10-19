@@ -1,0 +1,17 @@
+{
+  "name": "fakebase",
+  "version": "1.0.0",
+  "description": "Local fake of the Firebase RTDB compat subset used by rooms-v1.js (tests only)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js 9123",
+    "test": "node ../rooms.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "private": true
+}
