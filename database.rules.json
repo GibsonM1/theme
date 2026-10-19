@@ -1,0 +1,59 @@
+{
+  "rules": {
+    "rooms": {
+      "$game": {
+        "$period": {
+          ".read": "auth != null && $game.matches(/^[a-z0-9-]{1,24}$/) && $period.matches(/^[A-Za-z0-9]{1,12}$/)",
+          "$room": {
+            ".write": "auth != null && !newData.exists() && !data.child('players').exists()",
+            "meta": {
+              ".write": "auth != null && newData.exists() && $game.matches(/^[a-z0-9-]{1,24}$/) && $period.matches(/^[A-Za-z0-9]{1,12}$/) && $room.matches(/^[-0-9A-Za-z_]{20}$/)",
+              ".validate": "newData.hasChildren(['name', 'max', 'created', 'state'])",
+              "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+              "max": { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 40" },
+              "created": { ".validate": "newData.isNumber()" },
+              "countdownMs": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 600000" },
+              "state": { ".validate": "newData.val() == 'lobby' || newData.val() == 'countdown' || newData.val() == 'play'" },
+              "countdownEnd": { ".validate": "newData.isNumber()" },
+              "startAt": { ".validate": "newData.isNumber()" },
+              "seed": { ".validate": "newData.isString() && newData.val().length <= 40" },
+              "round": { ".validate": "newData.isNumber()" },
+              "gen": { ".validate": "newData.isNumber()" },
+              "settings": { ".validate": "newData.hasChildren()" },
+              "roster": { "$uid": { ".validate": "newData.val() == true" } },
+              "$other": { ".validate": false }
+            },
+            "players": {
+              "$uid": {
+                ".write": "auth != null && auth.uid == $uid",
+                ".validate": "newData.hasChildren(['name', 'joined']) && newData.parent().parent().child('meta').exists()",
+                "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+                "joined": { ".validate": "newData.isNumber()" },
+                "ready": { ".validate": "newData.isBoolean()" },
+                "readyGen": { ".validate": "newData.isNumber()" }
+              }
+            },
+            "data": {
+              ".write": "auth != null && !newData.exists()",
+              "boards": { "$uid": { ".write": "auth != null && auth.uid == $uid && root.child('rooms/' + $game + '/' + $period + '/' + $room + '/meta').exists()" } },
+              "progress": { "$uid": { ".write": "auth != null && auth.uid == $uid && root.child('rooms/' + $game + '/' + $period + '/' + $room + '/meta').exists()" } },
+              "results": { "$uid": { ".write": "auth != null && auth.uid == $uid && root.child('rooms/' + $game + '/' + $period + '/' + $room + '/meta').exists()" } },
+              "flags": { "$n": { "$uid": { ".write": "auth != null && auth.uid == $uid && root.child('rooms/' + $game + '/' + $period + '/' + $room + '/meta').exists()" } } },
+              "$other": { ".write": "auth != null && $other != 'boards' && $other != 'progress' && $other != 'results' && $other != 'flags' && root.child('rooms/' + $game + '/' + $period + '/' + $room + '/meta').exists()" }
+            },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+    "settings": {
+      "$game": {
+        "$period": {
+          ".read": "auth != null && $game.matches(/^[a-z0-9-]{1,24}$/) && $period.matches(/^[A-Za-z0-9]{1,12}$/)",
+          ".write": "auth != null && $game.matches(/^[a-z0-9-]{1,24}$/) && $period.matches(/^[A-Za-z0-9]{1,12}$/)",
+          ".validate": "newData.hasChildren()"
+        }
+      }
+    }
+  }
+}
