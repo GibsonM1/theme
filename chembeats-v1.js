@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 Matthew Gibson, Mission High School. CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/ Not for resale. */
 /* =====================================================================
    ChemBeats v1 — original, procedurally generated beat music for
    Mr. Gibson's chemistry games. No audio files: everything is

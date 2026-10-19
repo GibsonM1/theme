@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 Matthew Gibson, Mission High School. CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/ Not for resale. */
 /* Shared student login for Mr. Gibson's games (iBond, Ka-BOHR!, ...). Version 1.
  *
  * Each game loads it with:  <script src="https://gibsonm1.github.io/theme/login-v1.js"></script>

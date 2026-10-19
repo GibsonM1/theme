@@ -1,3 +1,4 @@
+/* Copyright (c) 2026 Matthew Gibson, Mission High School. CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/ Not for resale. */
 /* =====================================================================
    ChemBeats Tracks 2 — add-on tracks for chembeats-v1.js (needs v1.1+).
    Load AFTER the engine:
