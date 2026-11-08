@@ -21,7 +21,7 @@ Every track also gets a small pickup fill at the end of bar 4 and a "virada" fil
 
 ## How it was checked (Playwright Chromium, `ChemBeats.renderOffline`)
 - Events: for every track and level, every pair of bars 1-4 vs 5-8 has different events (none identical). Bar 9 equals bar 1 (the loop repeats).
-- Audio: per-bar spectrum and per-bar envelope differences between bars j and j+4 are well above the control (bar 9 vs bar 1).
+- Audio: per-bar spectrum and per-bar envelope differences between bars j and j+4 are above the control (bar 9 vs bar 1) at every track and level: 2 to 9 times for the harmonic tracks. Bateria Blast changes rhythm, not tone, so its spectrum difference is only 1.1 to 2.3 times the control (envelope difference 1.5 to 3.5 times).
 - Loudness (whole first 8 bars, RMS) is within +/-1.5 dB of v1.2 at every track and level.
 - Wrap: no NaN, no step in the 4 ms around the bar 8 to bar 9 boundary larger than at the other bar boundaries.
 - Level-ups (fill, then `enter`) and level-down work in a live AudioContext.
