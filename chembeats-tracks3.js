@@ -18,7 +18,12 @@
    Drum strokes and sung notes are synthesized once when a track starts (≈0.3 s, ≈4–5 MB per track),
    then replayed as samples, so these tracks cost about the same processing power as the v1 tracks.
 
-   Version: Oct 22, 2026, v1.2
+   Version: Nov 8, 2026, v1.3
+   v1.3: every track now loops over 8 bars instead of 4 (LOOP_BARS in the CONFIG block). Bars 1–4 are the
+         old loop (section A); bars 5–8 (section B) have a related chord order, a new melody or call-and-answer,
+         different drum / tamborim / pandeiro / cuíca patterns, and a short "virada" fill at the end of bar 8.
+         Bateria Blast varies its surdo, terceira, caixa and tamborim patterns. Roda Reaction and Covalent Crush
+         already had an 8-bar chord form; they now also change their rhythm parts in bars 5–8.
    v1.2: adds Roda Reaction and Covalent Crush.
    v1.1: drums rebuilt from noise-excited membrane modes (no sine "keyboard" tones), clean surdos
          by default (headphones), agogô −6 dB, Enredo melody from level 2, cuíca from level 3.
@@ -40,6 +45,7 @@ const CHEMBEATS_TRACKS3_CONFIG = {
   CUICA_LEVEL: 3,         // Bateria Blast: level where the cuíca comes in (Enredo always adds it at 4)
   ENREDO_MELODY_LEVEL: 2, // Enredo Elements: level where the "lá-laiá" melody starts (harmony +1 level, full choir + brass at 4)
   PARADINHA: true,        // Bateria level 4: a short unison "break" every 8 bars
+  LOOP_BARS: 8,           // how many bars before a track repeats: 8 = new longer loop, 4 = the old loop (Roda and Crush keep their 8-bar chords, with no rhythm changes in bars 5–8)
   SURDO_GRIT: false,      // true = distort the bass drums so they're heard on laptop speakers (off = clean, for headphones)
 };
 // =========================================================================
@@ -434,6 +440,14 @@ const CHEMBEATS_TRACKS3_CONFIG = {
   const louder = (ev, g) => { ev.forEach((e) => { e.vel = (e.vel ?? VDEF[e.v] ?? 1) * g; }); return ev; };   // per-track loudness match
   const TELE = [0, 2, 3, 5, 7, 9, 10, 12, 14];        // teleco-teco: the 2-measure phrase of tamborim + cavaquinho
   const PART = [0, 3, 5, 9, 11, 12, 14];              // partido-alto phrase
+  // ---- 8-bar loops: section A = bars 1–4 (the old loop), section B = bars 5–8 ----
+  const TELE_B = [0, 2, 4, 5, 7, 8, 10, 13, 15];      // section B teleco-teco (same density, different shape)
+  const PART_A2 = [0, 3, 5, 9, 11, 13, 14];           // partido phrase: answer on even bars of section A
+  const PART_B = [0, 3, 5, 8, 10, 13, 14];            // section B partido phrase
+  const PART_B2 = [0, 2, 5, 8, 10, 12, 15];           // section B answer
+  const loopBars = () => (C3.LOOP_BARS >= 8 ? 8 : 4);
+  // partido phrase for bar k (0–7). Roda and Crush: plain PART when LOOP_BARS is 4 (old behavior)
+  const phrase = (k, vary) => (!vary ? PART : k >= 4 ? (k % 2 ? PART_B2 : PART_B) : (k % 2 ? PART_A2 : PART));
   const isIn = (a, s) => a.indexOf(s) >= 0;
   // diatonic step inside a major key (tonic pitch class), for coro harmony
   function dia(m, steps, tonic) {
@@ -453,43 +467,70 @@ const CHEMBEATS_TRACKS3_CONFIG = {
 
   /* ================= bateria pieces (shared by Bateria and Enredo) ================= */
   // L = level, k = bar in the 4-bar loop, live(s) = false where a break/call silences the band
+  // alt = section B (bars 5–8 of the 8-bar loop): different terceira pattern + small off-beat answers on the bass drums
+  const T3_LO = [[2, 3, 4, 10, 11, 12], [2, 3, 4, 10, 11, 12, 15], [2, 3, 4, 10, 11, 12], [2, 3, 4, 10, 11, 13, 14]];
+  const T3_HI = [[2, 3, 4, 10, 11, 12], [2, 3, 4, 6, 7, 10, 11, 12, 14], [2, 3, 4, 10, 11, 12], [2, 3, 4, 7, 10, 12, 13, 14, 15]];
+  const T3B_LO = [[2, 3, 4, 10, 11, 12], [2, 3, 4, 10, 11, 12, 14], [2, 3, 4, 6, 10, 11, 12], [2, 3, 4, 10, 11, 12, 14]];
+  const T3B_HI = [[2, 3, 4, 7, 10, 11, 12], [2, 3, 4, 6, 7, 10, 11, 12, 15], [2, 3, 4, 10, 11, 12, 14], [2, 3, 4, 7, 10, 12, 13, 14, 15]];
+  const SURDO_B = [[6, 1, 0.45], [14, 1, 0.5], [6, 1, 0.45, 15, 2, 0.4], [10, 2, 0.4]];   // [step, surdo, vel (, step, surdo, vel)] per bar of section B
   function surdos(add, live, L, k, opt) {
-    const lite = opt && opt.lite;
+    const lite = opt && opt.lite, alt = opt && opt.alt, cut = opt && opt.cut;   // cut = leave out the 2nd downbeat of the segunda (a "corte")
     [0, 8].forEach((m) => {
-      if (live(m)) { add(m, 'surdo', { n: 2, vel: 0.9 }); if (!lite) add(m, 'surdo', { n: 1, mute: true, vel: 0.45 }); }
+      if (live(m) && !(cut && m === 8)) { add(m, 'surdo', { n: 2, vel: 0.9 }); if (!lite) add(m, 'surdo', { n: 1, mute: true, vel: 0.45 }); }
       if (live(m + 4)) { add(m + 4, 'surdo', { n: 1, vel: 1.05 }); if (!lite) add(m + 4, 'surdo', { n: 2, mute: true, vel: 0.35 }); }
     });
     if (L >= 2) {
-      const T3 = L >= 4 ? [[2, 3, 4, 10, 11, 12], [2, 3, 4, 6, 7, 10, 11, 12, 14], [2, 3, 4, 10, 11, 12], [2, 3, 4, 7, 10, 12, 13, 14, 15]][k]
-                        : [[2, 3, 4, 10, 11, 12], [2, 3, 4, 10, 11, 12, 15], [2, 3, 4, 10, 11, 12], [2, 3, 4, 10, 11, 13, 14]][k];
+      const T3 = L >= 4 ? (alt ? T3B_HI : T3_HI)[k] : (alt ? T3B_LO : T3_LO)[k];
       if (!(lite && L < 3)) T3.forEach((s) => live(s) && add(s, 'surdo', { n: 3, vel: s % 4 === 0 ? 0.9 : 0.75, mute: s % 4 === 2 && L < 4 }));
     }
+    if (alt) { const b = SURDO_B[k]; for (let j = 0; j < b.length; j += 3) if (live(b[j])) add(b[j], 'surdo', { n: b[j + 1], mute: true, vel: b[j + 2] }); }
   }
-  function caixa(add, live, L, vel) {
-    for (let s = 0; s < 16; s++) if (live(s)) add(s, 'caixa', { vel: vel * [0.55, 0.35, 0.6, 1][s % 4] });
+  // alt = section B: the accent moves to the "&"; light = bars 6 and 8 thin out (caixa without its soft "e" notes, chocalho in 8ths)
+  function caixa(add, live, L, vel, alt, light) {
+    const acc = alt ? [0.5, 0.35, 1, 0.6] : [0.55, 0.35, 0.6, 1];   // section B puts the accent on the "&" instead of the "a"
+    for (let s = 0; s < 16; s++) if (live(s) && !(light && s % 4 === 1)) add(s, 'caixa', { vel: vel * acc[s % 4] * (light ? 1.15 : 1) });
   }
-  function chocalho(add, live, L, vel, step) {
-    for (let s = 0; s < 16; s += step) if (live(s)) add(s, 'chocalho', { vel: vel * [0.4, 0.3, 0.75, 0.55][s % 4] });
+  function chocalho(add, live, L, vel, step, alt, light) {
+    const acc = alt ? [0.55, 0.3, 0.6, 0.85] : [0.4, 0.3, 0.75, 0.55];
+    if (light && L >= 2) step = 2;
+    for (let s = 0; s < 16; s += step) if (live(s)) add(s, 'chocalho', { vel: vel * acc[s % 4] * (light ? 1.3 : 1) });
   }
-  function tamborim(add, live, L, carreteiro) {
-    if (carreteiro) for (let s = 0; s < 16; s++) { if (live(s)) add(s, 'tamborim', isIn(TELE, s) ? { vel: 1 } : { vel: 1, flip: true }); }
-    else TELE.forEach((s) => live(s) && add(s, 'tamborim', { vel: s % 8 === 0 ? 1 : 0.85 }));
+  function tamborim(add, live, L, carreteiro, ph) {
+    ph = ph || TELE;
+    if (carreteiro) for (let s = 0; s < 16; s++) { if (live(s)) add(s, 'tamborim', isIn(ph, s) ? { vel: 1 } : { vel: 1, flip: true }); }
+    else ph.forEach((s) => live(s) && add(s, 'tamborim', { vel: s % 8 === 0 ? 1 : 0.85 }));
   }
   const AGOGO = [[0, 0], [2, 1], [3, 1], [5, 0], [6, 1], [8, 0], [10, 1], [11, 0], [13, 1], [14, 0]];
-  function agogo(add, live, f) { AGOGO.forEach(([s, h]) => live(s) && add(s, 'agogo', { hi: !!h, f, vel: h ? 0.9 : 1 })); }
+  const AGOGO_B = [[0, 0], [2, 1], [4, 0], [6, 1], [8, 0], [11, 1], [12, 0], [14, 1], [15, 1]];
+  function agogo(add, live, f, alt) { (alt ? AGOGO_B : AGOGO).forEach(([s, h]) => live(s) && add(s, 'agogo', { hi: !!h, f, vel: h ? 0.9 : 1 })); }
   const REP_GROOVE = [[0, 'rim', 0.6], [1, 'hand', 0.5], [3, 'open', 1], [5, 'hand', 0.5], [6, 'open', 0.9], [8, 'rim', 0.6], [9, 'hand', 0.5], [11, 'open', 1], [13, 'hand', 0.5], [14, 'open', 0.8], [15, 'open', 0.7]];
-  function repique(add, live, L, k) {
-    REP_GROOVE.forEach(([s, kk, v]) => live(s) && add(s, 'repique', { k: kk, vel: v }));
-    if (L >= 4 && k === 3) [12, 13].forEach((s) => live(s) && add(s, 'repique', { k: 'open', vel: 0.85 }));
+  const REP_B = [[0, 'rim', 0.6], [1, 'hand', 0.5], [2, 'open', 0.8], [5, 'hand', 0.5], [6, 'open', 1], [8, 'rim', 0.6], [10, 'hand', 0.5], [11, 'open', 1], [13, 'open', 0.8], [14, 'hand', 0.5], [15, 'open', 0.8]];
+  function repique(add, live, L, k, alt) {
+    (alt ? REP_B : REP_GROOVE).forEach(([s, kk, v]) => live(s) && add(s, 'repique', { k: kk, vel: v }));
+    if (L >= 4 && k === (alt ? 1 : 3)) (alt ? [12, 13, 14] : [12, 13]).forEach((s) => live(s) && add(s, 'repique', { k: 'open', vel: 0.85 }));
   }
   const CUICA = [[[2, 'up'], [3, 'dn'], [6, 'up'], [7, 'lo'], [10, 'up'], [11, 'dn'], [13, 'hi'], [14, 'dn']],
-                 [[2, 'up'], [3, 'dn'], [5, 'hi'], [6, 'hi'], [7, 'dn'], [10, 'up'], [11, 'dn'], [14, 'up', 3]]];
-  function cuica(add, live, k, f) { CUICA[k % 2].forEach(([s, sh, d]) => live(s) && add(s, 'cuica', { sh, f, dur: d || 1.1, vel: 0.9 })); }
+                 [[2, 'up'], [3, 'dn'], [5, 'hi'], [6, 'hi'], [7, 'dn'], [10, 'up'], [11, 'dn'], [14, 'up', 3]],
+                 [[2, 'hi'], [3, 'dn'], [6, 'up'], [7, 'dn'], [10, 'lo'], [11, 'up'], [14, 'dn', 2]],      // section B
+                 [[2, 'up'], [4, 'hi'], [5, 'dn'], [7, 'up'], [10, 'dn'], [12, 'up'], [13, 'hi'], [14, 'dn']]];
+  function cuica(add, live, k, f, alt) { CUICA[(alt ? 2 : 0) + k % 2].forEach(([s, sh, d]) => live(s) && add(s, 'cuica', { sh, f, dur: d || 1.1, vel: 0.9 })); }
   // level-up "chamada": whistle in the first half, repinique calls in the second while everyone else stops
   function chamada(add) {
     add(0, 'apito', { dur: 0.5 }); add(2, 'apito', { dur: 0.5 }); add(4, 'apito', { dur: 3.2 });
     [[8, 1], [9, 0.6], [11, 1], [12, 0.7], [14, 1]].forEach(([s, v]) => add(s, 'repique', { k: 'open', vel: v }));
     add(15, 'surdo', { n: 3, vel: 0.7 });
+  }
+  // "virada" = short fill that leads into the next bar. big = end of bar 8 (into the loop point), small = end of bar 4
+  function viradaSamba(add, L, big) {
+    const rise = [0.5, 0.7, 0.9, 1.1];
+    if (big) {
+      if (L === 1) [13, 14, 15].forEach((s, j) => add(s, 'surdo', { n: 3, vel: 0.6 + j * 0.2 }));
+      else {
+        [12, 13, 14, 15].forEach((s, j) => { add(s, 'caixa', { vel: rise[j] }); add(s, 'tamborim', { vel: rise[j] * 0.9 }); });
+        if (L >= 3) [14, 15].forEach((s) => add(s, 'repique', { k: 'open', vel: 0.9 }));
+      }
+    } else if (L === 1) add(15, 'surdo', { n: 3, vel: 0.7 });
+    else { add(14, 'tamborim', { vel: 0.8 }); add(15, 'tamborim', { vel: 1 }); }
   }
   function entrada(add) {   // everyone lands together on the new level
     [1, 2, 3].forEach((n) => add(0, 'surdo', { n, vel: 1.1 }));
@@ -498,19 +539,22 @@ const CHEMBEATS_TRACKS3_CONFIG = {
 
   /* ===================== Track A: Bateria Blast (pure percussion) =====================
      L1 surdos + chocalho · L2 + caixa + terceira · L3 + tamborim teleco-teco, agogô, repinique
-     L4 + tamborim carreteiro, busier terceira, paradinha (unison break) every 8 bars. Cuíca from CUICA_LEVEL (3) */
+     L4 + tamborim carreteiro, busier terceira, paradinha (unison break) every 8 bars. Cuíca from CUICA_LEVEL (3)
+     8-bar loop: bars 5–8 change the terceira, caixa accent, chocalho accent, tamborim phrase, agogô, repinique and
+     cuíca patterns and add off-beat bass-drum answers; small fill at the end of bar 4, "virada" at the end of bar 8 */
   CB.addTrack({
     id: 'bateria', name: 'Bateria Blast', bpm: () => C3.BATERIA_BPM, filter: [16000, 16000, 16000, 16000], endChord: [],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4;
+      const { ev, add } = mk(), n8 = loopBars() === 8, k8 = i % loopBars(), k = k8 % 4, B = k8 >= 4;
       const brk = L >= 4 && C3.PARADINHA && !f.fill && i % 8 === 7;
       const live = (s) => !((f.fill || brk) && s >= 8);
       if (f.enter) entrada(add);
-      surdos(add, live, L, k);
-      chocalho(add, live, L, L === 1 ? 1.15 : 1, 1);
-      if (L >= 2) caixa(add, live, L, L === 2 ? 0.8 : 1);
-      if (L >= 3) { tamborim(add, live, L, L >= 4 && k % 2 === 1); agogo(add, live, 740); repique(add, live, L, k); }
-      if (L >= C3.CUICA_LEVEL) cuica(add, live, k, 620);
+      surdos(add, live, L, k, { alt: B, cut: B && k === 2 && L >= 2 });
+      chocalho(add, live, L, L === 1 ? 1.15 : 1, 1, B, B && k % 2 === 1);
+      if (L >= 2) caixa(add, live, L, L === 2 ? 0.8 : 1, B, B && k % 2 === 1);
+      if (L >= 3) { tamborim(add, live, L, L >= 4 && k % 2 === (B ? 0 : 1), B ? TELE_B : TELE); agogo(add, live, 740, B); repique(add, live, L, k, B); }
+      if (L >= C3.CUICA_LEVEL) cuica(add, live, k, 620, B);
+      if (n8 && !f.fill && !brk && (k8 === 3 || k8 === 7)) viradaSamba(add, L, k8 === 7);
       if (f.fill) chamada(add);
       if (brk) {   // paradinha: whistle cue, then the whole bateria hits 3 unison accents
         add(2, 'apito', { dur: 0.6 }); add(4, 'apito', { dur: 0.6 });
@@ -526,7 +570,9 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      L2 + caixa, chocalho, tamborim, full cavaquinho 16ths (open on the phrase, choked in between)
      L2+ "lá-laiá" melody (ENREDO_MELODY_LEVEL), harmony part one level later
      L3 + guitar runs (baixarias), terceira, agogô, repinique
-     L4 + full coro (3 parts), brass, tamborim carreteiro, cuíca */
+     L4 + full coro (3 parts), brass, tamborim carreteiro, cuíca
+     8-bar loop, section B (bars 5–8): Em7 A7 | D6 B7 | Gmaj7 Gm6 | E7 A7 — new melody (higher), new brass hits,
+     new teleco-teco and bateria patterns, small fill at the end of bar 4, "virada" at the end of bar 8 */
   const EN = {
     tonic: 2,
     ch: [[[62, 66, 69, 71], [62, 66, 69, 71]], [[66, 69, 71, 74], [64, 66, 70, 73]], [[62, 66, 67, 71], [64, 67, 69, 73]], [[62, 66, 69, 71], [64, 67, 69, 73]]],
@@ -539,23 +585,33 @@ const CHEMBEATS_TRACKS3_CONFIG = {
     ],
     brass: [[], [[14, 1, 0], [15, 2, 1]], [[6, 1, 0], [7, 1, 0]], [[14, 1, 0], [15, 2, 1]]],   // [step, len, fall?] on that measure's chord
   };
+  // section B (bars 5–8): Em7 A7 | D6 B7 | Gmaj7 Gm6 | E7 A7 — ii–V, secondary dominant, the minor-iv color, then V/V into V and home to bar 1
+  EN.ch.push([[62, 64, 67, 71], [64, 67, 69, 73]], [[62, 66, 69, 71], [63, 66, 69, 71]], [[62, 66, 67, 71], [62, 64, 67, 70]], [[62, 64, 68, 71], [64, 67, 69, 73]]);
+  EN.bass.push([[40, 47], [45, 40]], [[38, 45], [35, 42]], [[43, 38], [43, 38]], [[40, 47], [45, 40]]);
+  EN.mel.push(
+    [[0, 76, 2, 'a'], [2, 74, 1], [3, 71, 1], [4, 69, 3, 'ia'], [7, 71, 1], [10, 74, 1], [11, 73, 1], [12, 76, 3, 'ia'], [15, 73, 1]],
+    [[2, 74, 1], [3, 76, 1], [4, 78, 3, 'ia'], [7, 76, 1], [10, 75, 1], [11, 78, 1], [12, 75, 3, 'ia'], [15, 71, 1]],
+    [[0, 71, 2, 'a'], [2, 74, 1], [3, 79, 2, 'ia'], [5, 78, 1], [6, 74, 2], [8, 70, 3, 'ia'], [11, 74, 1], [12, 76, 3, 'a']],
+    [[2, 71, 1], [3, 74, 1], [4, 76, 2, 'ia'], [6, 80, 1], [7, 76, 1], [8, 73, 2, 'a'], [10, 76, 1], [11, 79, 1], [12, 81, 2, 'ia'], [14, 76, 2]]);
+  EN.brass.push([[3, 1, 0], [6, 1, 0]], [[14, 1, 0], [15, 2, 1]], [[0, 2, 0], [6, 1, 0], [7, 1, 0]], [[10, 1, 0], [12, 1, 0], [14, 1, 0], [15, 1, 1]]);
   CB.addTrack({
     id: 'enredo', name: 'Enredo Elements', bpm: () => C3.ENREDO_BPM, filter: [3600, 6000, 10000, 16000], endChord: [62, 66, 69, 71],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, nk = (k + 1) % 4;
+      const N = loopBars(), { ev, add } = mk(), k = i % N, nk = (k + 1) % N, B = k >= 4, TP = B ? TELE_B : TELE;
       const live = (s) => !(f.fill && s >= 8);
       const chordAt = (s) => EN.ch[k][s < 8 ? 0 : 1];
       if (f.enter) { entrada(add); add(0, 'strum', { ms: EN.ch[k][0], dur: 4, vel: 1.1 }); }
       // bateria (lighter than Bateria Blast)
-      surdos(add, live, L, k, { lite: true });
-      if (L >= 2) { caixa(add, live, L, 0.7); chocalho(add, live, L, 0.8, 1); }
-      if (L >= 2) tamborim(add, live, L, L >= 4 && k % 2 === 1);
-      if (L >= 3) { agogo(add, live, 880); repique(add, live, L, k); }
-      if (L >= 4) cuica(add, live, k, 700);
+      surdos(add, live, L, k % 4, { lite: true, alt: B });
+      if (L >= 2) { caixa(add, live, L, 0.7, B); chocalho(add, live, L, 0.8, 1, B); }
+      if (L >= 2) tamborim(add, live, L, L >= 4 && k % 2 === (B ? 0 : 1), TP);
+      if (L >= 3) { agogo(add, live, 880, B); repique(add, live, L, k % 4, B); }
+      if (L >= 4) cuica(add, live, k % 4, 700, B);
+      if (N === 8 && !f.fill && (k === 3 || k === 7)) viradaSamba(add, L, k === 7);
       // cavaquinho
       for (let s = 0; s < 16; s++) {
         if (!live(s)) continue;
-        if (isIn(TELE, s)) add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, dur: 1.4, vel: 0.95 });
+        if (isIn(TP, s)) add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, dur: 1.4, vel: 0.95 });
         else if (L >= 2) add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, mute: true, vel: 0.7 });
       }
       // 7-string guitar: root on beat 1, fifth on beat 2; runs into the next chord at L3+
@@ -588,22 +644,37 @@ const CHEMBEATS_TRACKS3_CONFIG = {
   });
 
   /* =========== pagode pieces (shared by Backyard Bonds and Partido Periodic) =========== */
-  function tanta(add, live, L, k) {
-    [0, 8].forEach((m) => { if (live(m)) add(m, 'tanta', { k: 'mute', vel: 0.55 }); if (live(m + 4)) add(m + 4, 'tanta', { k: 'open', vel: 1 }); });
-    if (L >= 2) [2, 6, 7, 10, 14, 15].forEach((s) => live(s) && add(s, 'tanta', { k: 'shell', vel: s % 4 === 3 ? 0.6 : 0.85 }));
-    if (L >= 4 && k === 3 && live(13)) add(13, 'tanta', { k: 'open', vel: 0.7 });
+  // alt = section B (bars 5–8 of the 8-bar loop): tantã pickup on the "a" of 1, different shell answers, slaps in new places
+  function tanta(add, live, L, k, alt) {
+    [0, 8].forEach((m) => {
+      if (live(m)) add(m, 'tanta', { k: 'mute', vel: 0.55 });
+      if (alt && live(m + 3)) add(m + 3, 'tanta', { k: 'open', vel: 0.45 });
+      if (live(m + 4)) add(m + 4, 'tanta', { k: 'open', vel: 1 });
+    });
+    if (L >= 2) (alt ? [2, 5, 6, 9, 10, 14] : [2, 6, 7, 10, 14, 15]).forEach((s) => live(s) && add(s, 'tanta', { k: 'shell', vel: s % 4 === 3 ? 0.6 : 0.85 }));
+    if (L >= 4 && k % 4 === 3 && live(13)) add(13, 'tanta', { k: 'open', vel: 0.7 });
   }
-  function pandeiro(add, live, L, slapVel) {
+  function pandeiro(add, live, L, slapVel, alt) {
     for (let s = 0; s < 16; s++) {
       if (!live(s)) continue;
       const q = s % 4, beat2 = s % 8 === 4;
       if (q === 0) add(s, 'pandeiro', { k: 'T', open: beat2, vel: L === 1 ? (beat2 ? 0.75 : 0.5) : (beat2 ? 0.95 : 0.65) });
-      else if (q === 2) add(s, 'pandeiro', L >= 2 && s % 8 === 6 ? { k: 'S', vel: slapVel } : { k: 'P', vel: L === 1 ? 0.45 : 0.6 });
+      else if (q === 2) add(s, 'pandeiro', L >= 2 && (alt ? (s === 2 || s === 14) : s % 8 === 6) ? { k: 'S', vel: slapVel } : { k: 'P', vel: L === 1 ? 0.45 : 0.6 });
+      else if (alt && L === 1 && s % 8 === 3) add(s, 'pandeiro', { k: 'T', vel: 0.4 });
       else add(s, 'pandeiro', { k: 'F', vel: L === 1 ? 0.3 : (q === 3 ? 0.5 : 0.38) });
     }
   }
   const RM = [[0, 'open'], [2, 'rim'], [5, 'rim'], [6, 'open'], [7, 'rim'], [8, 'open'], [10, 'rim'], [13, 'rim'], [14, 'open'], [15, 'open']];
-  function repmao(add, live, L) { RM.forEach(([s, kk]) => live(s) && add(s, 'repmao', { k: kk, vel: kk === 'open' ? 0.95 : 0.7 })); if (L >= 4) [3, 11].forEach((s) => live(s) && add(s, 'repmao', { k: 'tone', vel: 0.6 })); }
+  const RM_B = [[0, 'open'], [2, 'rim'], [4, 'rim'], [6, 'open'], [7, 'open'], [9, 'rim'], [10, 'open'], [13, 'rim'], [14, 'open'], [15, 'rim']];
+  function repmao(add, live, L, alt) { (alt ? RM_B : RM).forEach(([s, kk]) => live(s) && add(s, 'repmao', { k: kk, vel: kk === 'open' ? 0.95 : 0.7 })); if (L >= 4) (alt ? [5, 12] : [3, 11]).forEach((s) => live(s) && add(s, 'repmao', { k: 'tone', vel: 0.6 })); }
+  // "virada" = short fill into the next bar. big = end of bar 8 (into the loop point), small = end of bar 4
+  function viradaPag(add, L, big) {
+    if (big) {
+      for (let j = 0; j < 8; j++) add(12 + j / 2, 'pandeiro', { k: j % 4 === 0 ? 'S' : 'F', vel: 0.35 + j * 0.07 });
+      add(15, 'tanta', { k: 'open', vel: 0.7 });
+      if (L >= 2) [14, 15].forEach((s) => add(s, 'repmao', { k: 'open', vel: s === 15 ? 0.85 : 0.6 }));
+    } else { add(14.5, 'pandeiro', { k: 'S', vel: 0.5 }); add(15, 'pandeiro', { k: 'S', vel: 0.65 }); add(15, 'tanta', { k: 'open', vel: 0.5 }); }
+  }
   function viradaPandeiro(add) {   // pandeiro roll into the next level, tantã underneath
     for (let j = 0; j < 12; j++) add(8 + j * (8 / 12), 'pandeiro', { k: j % 3 === 0 ? 'S' : 'F', vel: 0.45 + 0.5 * j / 11 });
     [[8, 'open'], [11, 'open'], [14, 'open']].forEach(([s, kk]) => add(s, 'tanta', { k: kk, vel: 0.9 }));
@@ -615,7 +686,10 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      L1 tantã, soft pandeiro, cavaquinho chords, guitar bass
      L2 full pandeiro (slaps), tantã shell slaps, cavaquinho on the teleco-teco
      L3 + repique de mão, banjo takes the rhythm, cavaquinho solo melody, guitar runs
-     L4 + ganzá, quiet "laiá" coro */
+     L4 + ganzá, quiet "laiá" coro
+     8-bar loop, section B (bars 5–8): Fmaj7 Em7 | Dm7 D♭7 | Cmaj7 A7 | Dm7 E7 — a bass line walking down F–E–D–D♭–C,
+     a new, higher cavaquinho melody, new tantã / pandeiro / hand-drum patterns, small fill at the end of bar 4,
+     "virada" at the end of bar 8 */
   const QU = {
     tonic: 0,   // C major / A minor
     ch: [[[64, 67, 69, 72], [64, 67, 69, 72]], [[62, 65, 69, 72], [62, 65, 67, 71]], [[64, 67, 71, 72], [64, 65, 69, 72]], [[62, 65, 69, 71], [62, 64, 68, 71]]],
@@ -627,31 +701,39 @@ const CHEMBEATS_TRACKS3_CONFIG = {
       [[2, 74, 1], [3, 77, 1], [4, 81, 2], [7, 77, 1], [8, 76, 2], [10, 74, 1], [11, 71, 1], [12, 68, 2], [14, 71, 1], [15, 72, 1]],
     ],
   };
-  const QU_L1 = [0, 3, 7, 8, 11, 14];
+  QU.ch.push([[64, 65, 69, 72], [62, 64, 67, 71]], [[62, 65, 69, 72], [61, 65, 68, 71]], [[64, 67, 71, 72], [64, 67, 69, 73]], [[62, 65, 69, 72], [62, 64, 68, 71]]);
+  QU.bass.push([[41, 36], [40, 47]], [[38, 45], [37, 44]], [[36, 43], [45, 40]], [[38, 45], [40, 35]]);
+  QU.mel.push(
+    [[0, 81, 2], [2, 77, 1], [3, 81, 1], [4, 84, 2], [7, 81, 1], [8, 79, 2], [11, 76, 1], [12, 74, 3], [15, 76, 1]],
+    [[2, 77, 1], [3, 74, 1], [4, 72, 2], [7, 74, 1], [8, 77, 2], [10, 80, 1], [11, 77, 1], [12, 73, 3], [15, 72, 1]],
+    [[0, 79, 2], [2, 76, 1], [3, 79, 1], [4, 84, 2], [7, 83, 1], [8, 81, 2], [10, 76, 1], [11, 73, 1], [12, 76, 3], [15, 79, 1]],
+    [[2, 77, 1], [3, 81, 1], [4, 81, 2], [7, 77, 1], [8, 80, 2], [10, 76, 1], [11, 71, 1], [12, 68, 2], [14, 71, 1], [15, 72, 1]]);
+  const QU_L1 = [0, 3, 7, 8, 11, 14], QU_L1B = [0, 3, 6, 8, 10, 14];
   CB.addTrack({
     id: 'quintal', name: 'Backyard Bonds', bpm: () => C3.QUINTAL_BPM, filter: [3200, 5000, 8000, 14000], endChord: [57, 64, 67, 72],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, nk = (k + 1) % 4;
+      const N = loopBars(), { ev, add } = mk(), k = i % N, nk = (k + 1) % N, B = k >= 4, TP = B ? TELE_B : TELE;
       const live = (s) => !(f.fill && s >= 8);
       const chordAt = (s) => QU.ch[k][s < 8 ? 0 : 1];
       if (f.enter) { add(0, 'tanta', { k: 'open', vel: 1.1 }); add(0, 'pandeiro', { k: 'S', vel: 1 }); add(0, 'strum', { ms: QU.ch[k][0], dur: 4, vel: 1 }); }
-      tanta(add, live, L, k);
-      pandeiro(add, live, L, 0.85);
-      if (L >= 3) repmao(add, live, L);
+      tanta(add, live, L, k, B);
+      pandeiro(add, live, L, 0.85, B);
+      if (L >= 3) repmao(add, live, L, B);
       if (L >= 4) for (let s = 0; s < 16; s++) live(s) && add(s, 'ganza', { vel: s % 4 === 3 ? 0.6 : 0.32, acc: s % 4 === 3 });
+      if (N === 8 && !f.fill && (k === 3 || k === 7)) viradaPag(add, L, k === 7);
       // rhythm strings: cavaquinho (L1–2) → banjo (L3+) on the teleco-teco
       const rInst = L >= 3 ? 'banjo' : 'cav';
       for (let s = 0; s < 16; s++) {
         if (!live(s)) continue;
-        if (L === 1) { if (isIn(QU_L1, s)) add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, dur: 2, vel: 0.85 }); }
-        else if (isIn(TELE, s)) add(s, 'strum', { inst: rInst, ms: chordAt(s), up: s % 2 === 1, dur: 1.4, vel: 0.9 });
+        if (L === 1) { if (isIn(B ? QU_L1B : QU_L1, s)) add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, dur: 2, vel: 0.85 }); }
+        else if (isIn(TP, s)) add(s, 'strum', { inst: rInst, ms: chordAt(s), up: s % 2 === 1, dur: 1.4, vel: 0.9 });
         else if (s % 2 === 1) add(s, 'strum', { inst: rInst, ms: chordAt(s), up: true, mute: true, vel: 0.6 });
       }
       // guitar bass + runs
       [0, 8].forEach((m, h) => {
         const [r, fi] = QU.bass[k][h];
         if (live(m)) add(m, 'pluck', { inst: 'violao', m: r, dur: 3.5, vel: 1 });
-        const runHere = L >= 3 && h === 1 && !f.fill && (k === 1 || k === 3);
+        const runHere = L >= 3 && h === 1 && !f.fill && (k % 4 === 1 || k % 4 === 3);
         if (runHere) run(fi, QU.bass[nk][0][0], 4, QU.tonic).forEach((nm, j) => add(12 + j, 'pluck', { inst: 'violao', m: nm, dur: 1, vel: 0.85 }));
         else if (live(m + 4)) add(m + 4, 'pluck', { inst: 'violao', m: fi, dur: 3.5, vel: 0.85 });
       });
@@ -662,7 +744,7 @@ const CHEMBEATS_TRACKS3_CONFIG = {
         if (L >= 4 && d >= 2) add(s, 'sing', { m: m - 12, dur: d * 1.4, syl: s % 8 === 4 ? 'ia' : 'la', n: 2, vel: 1.35 });
       });
       if (f.fill) { viradaPandeiro(add); add(8, 'strum', { inst: rInst, ms: QU.ch[k][1], dur: 6, vel: 0.85 }); }
-      return louder(ev, 1.3);
+      return louder(ev, 1.23);   // 1.3 in v1.2: trimmed 0.5 dB because bars 5–8 add notes
     },
   });
 
@@ -671,7 +753,10 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      L1 tantã, pandeiro, cavaquinho on the partido-alto phrase, guitar bass
      L2 + palmas (hand claps) on the phrase, hard pandeiro slaps, tantã shell
      L3 + banjo, repique de mão, call (solo singer, bars 1–2) and response (coro, bars 3–4)
-     L4 + tamborim, reco-reco, coro doubled an octave down, cavaquinho answers the call */
+     L4 + tamborim, reco-reco, coro doubled an octave down, cavaquinho answers the call
+     8-bar loop, section B (bars 5–8): B♭6 B♭m6 | F6 A♭°7 | Am7 D7 | Gm7 C7 — new partido phrase, a higher call
+     (bars 5–6) and a new coro answer (bars 7–8), new tantã / pandeiro / hand-drum / reco-reco patterns,
+     small fill at the end of bar 4, "virada" at the end of bar 8 */
   const PA = {
     tonic: 5,
     ch: [[[62, 65, 69, 72], [62, 66, 69, 72]], [[62, 65, 67, 70], [64, 67, 70, 72]], [[62, 65, 69, 72], [63, 65, 69, 72]], [[65, 67, 70, 74], [64, 67, 70, 72]]],
@@ -687,22 +772,35 @@ const CHEMBEATS_TRACKS3_CONFIG = {
     // cavaquinho answers inside the call's rests (L4)
     fills: [[[0, 77], [1, 76], [2, 74]], [[0, 74], [1, 72], [2, 70]]],
   };
+  // section B: B♭6 B♭m6 | F6 A♭°7 | Am7 D7 | Gm7 C7 (IV and minor iv, then ii–V ladders back to F)
+  PA.ch.push([[65, 67, 70, 74], [65, 67, 70, 73]], [[62, 65, 69, 72], [62, 65, 68, 71]], [[64, 67, 69, 72], [62, 66, 69, 72]], [[62, 65, 67, 70], [64, 67, 70, 72]]);
+  PA.bass.push([[46, 41], [46, 41]], [[41, 48], [44, 50]], [[45, 40], [38, 45]], [[43, 38], [36, 43]]);
+  PA.call2 = [
+    [[3, 74, 2], [5, 77, 1], [6, 79, 2], [9, 82, 1], [11, 79, 1], [12, 77, 2], [14, 73, 2]],
+    [[3, 81, 2], [5, 77, 1], [6, 74, 2], [9, 77, 1], [11, 80, 1], [12, 77, 2], [14, 74, 2]],
+  ];
+  PA.resp2 = [
+    [[0, 76, 2, 'a'], [3, 79, 2, 'ia'], [5, 81, 1], [6, 78, 2], [9, 74, 2, 'ia'], [11, 78, 1], [12, 81, 3]],
+    [[0, 74, 2, 'a'], [3, 77, 1], [5, 79, 1], [6, 82, 2, 'ia'], [9, 79, 1], [11, 76, 1], [12, 74, 2], [14, 76, 2, 'ia']],
+  ];
+  PA.fills2 = [[[0, 82], [1, 81], [2, 79]], [[0, 79], [1, 77], [2, 74]]];
   CB.addTrack({
     id: 'partido', name: 'Partido Periodic', bpm: () => C3.PARTIDO_BPM, filter: [3400, 6000, 10000, 16000], endChord: [65, 69, 72, 74],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, nk = (k + 1) % 4;
+      const N = loopBars(), { ev, add } = mk(), k = i % N, nk = (k + 1) % N, B = k >= 4, ph = k % 4, PP = B ? PART_B : PART, TP = B ? TELE_B : TELE;
       const live = (s) => !(f.fill && s >= 8);
       const chordAt = (s) => PA.ch[k][s < 8 ? 0 : 1];
       if (f.enter) { add(0, 'tanta', { k: 'open', vel: 1.1 }); add(0, 'palmas', { vel: 1, n: 7 }); add(0, 'strum', { ms: PA.ch[k][0], dur: 4, vel: 1 }); }
-      tanta(add, live, L, k);
-      pandeiro(add, live, L, L >= 2 ? 1.15 : 0.8);
-      if (L >= 2) PART.forEach((s) => live(s) && add(s, 'palmas', { vel: L >= 4 ? 0.95 : 0.75 }));
-      if (L >= 3) repmao(add, live, L);
-      if (L >= 4) { tamborim(add, live, L, false); [2, 6, 10, 14].forEach((s) => live(s) && add(s, 'reco', { dur: 1.6, vel: 0.7 })); [3, 7, 11, 15].forEach((s) => live(s) && add(s, 'reco', { dur: 0.6, vel: 0.5, rate: 85 })); }
+      tanta(add, live, L, k, B);
+      pandeiro(add, live, L, L >= 2 ? 1.15 : 0.8, B);
+      if (L >= 2) PP.forEach((s) => live(s) && add(s, 'palmas', { vel: L >= 4 ? 0.95 : 0.75 }));
+      if (L >= 3) repmao(add, live, L, B);
+      if (L >= 4) { tamborim(add, live, L, false, TP); (B ? [0, 4, 8, 12] : [2, 6, 10, 14]).forEach((s) => live(s) && add(s, 'reco', { dur: 1.6, vel: 0.7 })); (B ? [2, 6, 10, 14] : [3, 7, 11, 15]).forEach((s) => live(s) && add(s, 'reco', { dur: 0.6, vel: 0.5, rate: 85 })); }
+      if (N === 8 && !f.fill && (k === 3 || k === 7)) viradaPag(add, L, k === 7);
       // cavaquinho (and banjo at L3+) on the partido-alto phrase, choked strums between
       for (let s = 0; s < 16; s++) {
         if (!live(s)) continue;
-        if (isIn(PART, s)) {
+        if (isIn(PP, s)) {
           add(s, 'strum', { ms: chordAt(s), up: s % 2 === 1, dur: 1.5, vel: 0.95 });
           if (L >= 3) add(s, 'strum', { inst: 'banjo', ms: chordAt(s).map((m) => m + 12), up: s % 2 === 1, dur: 1, vel: 0.75 });
         } else if (L >= 2 && s % 2 === 1) add(s, 'strum', { ms: chordAt(s), up: true, mute: true, vel: 0.6 });
@@ -710,27 +808,27 @@ const CHEMBEATS_TRACKS3_CONFIG = {
       [0, 8].forEach((m, h) => {
         const [r, fi] = PA.bass[k][h];
         if (live(m)) add(m, 'pluck', { inst: 'violao', m: r, dur: 3, vel: 1 });
-        const runHere = L >= 3 && h === 1 && !f.fill && k === 3;
+        const runHere = L >= 3 && h === 1 && !f.fill && (ph === 3 || k === 5);
         if (runHere) run(fi, PA.bass[nk][0][0], 4, PA.tonic).forEach((nm, j) => add(12 + j, 'pluck', { inst: 'violao', m: nm, dur: 1, vel: 0.85 }));
         else if (live(m + 4)) add(m + 4, 'pluck', { inst: 'violao', m: fi, dur: 3, vel: 0.85 });
       });
       // call and response
       if (L >= 3) {
-        const resp = k >= 2, line = resp ? PA.resp[k - 2] : PA.call[k];
+        const resp = ph >= 2, line = B ? (resp ? PA.resp2[ph - 2] : PA.call2[ph]) : (resp ? PA.resp[ph - 2] : PA.call[ph]);
         line.forEach(([s, m, d, syl]) => {
           if (!live(s)) return;
           const o = { m, dur: d * 0.9, syl: syl || 'la', vel: resp ? 0.95 : 1.05 };
           if (resp) { add(s, 'sing', Object.assign(o, { n: 2, vel: 1.05 })); add(s, 'sing', { m: dia(m, -2, PA.tonic), dur: d * 0.9, syl: syl || 'la', n: 2, vel: 0.6, pan: -0.3 }); if (L >= 4) add(s, 'sing', { m: m - 12, dur: d * 0.9, syl: syl || 'la', n: 2, vel: 0.6, pan: 0.3 }); }
           else add(s, 'sing', o);
         });
-        if (L >= 4 && !resp) PA.fills[k].forEach(([s, m]) => live(s) && add(s, 'pluck', { inst: 'cav', m, dur: 1, vel: 0.85, pan: 0.15 }));
+        if (L >= 4 && !resp) (B ? PA.fills2 : PA.fills)[ph].forEach(([s, m]) => live(s) && add(s, 'pluck', { inst: 'cav', m, dur: 1, vel: 0.85, pan: 0.15 }));
       }
       if (f.fill) {
         viradaPandeiro(add);
         [8, 10, 12, 13, 14].forEach((s) => add(s, 'palmas', { vel: 0.9 }));
         add(8, 'strum', { ms: PA.ch[k][1], dur: 6, vel: 0.9 });
       }
-      return louder(ev, 1.45);
+      return louder(ev, 1.36);   // 1.45 in v1.2: trimmed for the same reason
     },
   });
 
@@ -738,12 +836,13 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      Modeled on the 1980 Cacique de Ramos sound: Sereno's tantã, Ubirany's repique de mão, Bira's pandeiro,
      Almir Guineto's banjo ("a harmonic reco-reco"), cavaquinho, 6- and 7-string violão, group coro.
      Original progressions and melodies. 8-bar (16-measure) phrases instead of 4. */
-  function tantaFQ(add, live, L, k) {   // muted 1, pickup on the "a" of 1, heavy open 2, shell answers
+  // alt = bars 5–8 of the 8-bar loop: the pickup is there at every level, and the shell answers move
+  function tantaFQ(add, live, L, k, alt) {   // muted 1, pickup on the "a" of 1, heavy open 2, shell answers
     [0, 8].forEach((m) => {
       if (live(m)) add(m, 'tanta', { k: 'mute', vel: 0.6 });
-      if (L >= 2 && live(m + 3)) add(m + 3, 'tanta', { k: 'open', vel: 0.5 });
+      if ((L >= 2 || alt) && live(m + 3)) add(m + 3, 'tanta', { k: 'open', vel: 0.5 });
       if (live(m + 4)) add(m + 4, 'tanta', { k: 'open', vel: 1 });
-      if (L >= 2) [m + 6, m + 7].forEach((s) => live(s) && add(s, 'tanta', { k: 'shell', vel: s % 2 ? 0.55 : 0.8 }));
+      if (L >= 2) (alt ? [m + 5, m + 7] : [m + 6, m + 7]).forEach((s) => live(s) && add(s, 'tanta', { k: 'shell', vel: s % 2 ? 0.55 : 0.8 }));
     });
     if (L >= 4 && k % 4 === 3 && live(13)) add(13, 'tanta', { k: 'open', vel: 0.7 });
   }
@@ -781,7 +880,10 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      L1 tantã, pandeiro, cavaquinho on the partido phrase, 7-string bass
      L2 + banjo 16ths (reco-reco harmônico), repique de mão, tantã pickups and shell
      L3 + call (solo singer, bars 1–4) and response (coro, bars 5–8), guitar runs, palmas
-     L4 + coro octave + harmony, surdo on 2, ganzá, harder palmas */
+     L4 + coro octave + harmony, surdo on 2, ganzá, harder palmas
+     The chords and melodies already ran 8 bars. v1.3 adds rhythm variation: odd bars answer the partido phrase,
+     bars 5–8 get their own phrase, tantã, pandeiro slaps, hand drum and surdo patterns, a small fill at the end
+     of bar 4 and a "virada" at the end of bar 8 */
   const RO = {
     tonic: 7,
     ch: [[[62, 64, 67, 71], [62, 64, 68, 71]], [[64, 67, 69, 72], [62, 66, 69, 72]], [[62, 66, 69, 71], [62, 64, 68, 71]], [[64, 67, 69, 72], [62, 66, 69, 72]],
@@ -803,26 +905,27 @@ const CHEMBEATS_TRACKS3_CONFIG = {
   CB.addTrack({
     id: 'roda', name: 'Roda Reaction', bpm: () => C3.RODA_BPM, filter: [4000, 7000, 11000, 16000], endChord: [55, 62, 64, 67, 71],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 8, nk = (k + 1) % 8;
+      const { ev, add } = mk(), k = i % 8, nk = (k + 1) % 8, V8 = loopBars() === 8, B = V8 && k >= 4, PH = phrase(k, V8);
       const live = (s) => !(f.fill && s >= 8);
       if (f.enter) { add(0, 'tanta', { k: 'open', vel: 1.1 }); add(0, 'pandeiro', { k: 'S', vel: 1 }); add(0, 'palmas', { vel: 1, n: 7 }); add(0, 'strum', { ms: RO.ch[k][0], dur: 4, vel: 1 }); }
-      tantaFQ(add, live, L, k);
-      pandeiro(add, live, L, L >= 2 ? 1.05 : 0.8);
-      if (L >= 2) repmao(add, live, L);
-      if (L >= 3) PART.forEach((s) => live(s) && add(s, 'palmas', { vel: L >= 4 ? 0.9 : 0.6 }));
+      tantaFQ(add, live, L, k, B);
+      pandeiro(add, live, L, L >= 2 ? 1.05 : 0.8, B);
+      if (L >= 2) repmao(add, live, L, B);
+      if (L >= 3) PH.forEach((s) => live(s) && add(s, 'palmas', { vel: L >= 4 ? 0.9 : 0.6 }));
+      if (V8 && !f.fill && (k === 3 || k === 7)) viradaPag(add, L, k === 7);
       if (L >= 4) {
-        [4, 12].forEach((s) => live(s) && add(s, 'surdo', { n: 1, vel: 0.55 }));
+        (B ? [4, 10, 12] : [4, 12]).forEach((s) => live(s) && add(s, 'surdo', { n: 1, vel: 0.55 }));
         for (let s = 0; s < 16; s++) live(s) && add(s, 'ganza', { vel: s % 4 === 3 ? 0.55 : 0.3, acc: s % 4 === 3 });
       }
-      cordas(add, live, 'cav', RO.ch[k], PART, { vel: 0.9 });
-      if (L >= 2) cordas(add, live, 'banjo', RO.ch[k], PART, { vel: L >= 4 ? 0.8 : 0.65, open: 1, all: true });
+      cordas(add, live, 'cav', RO.ch[k], PH, { vel: 0.9 });
+      if (L >= 2) cordas(add, live, 'banjo', RO.ch[k], PH, { vel: L >= 4 ? 0.8 : 0.65, open: 1, all: true });
       violaoBass(add, live, L, RO, k, nk, L >= 3 && !f.fill && k % 2 === 1);
       if (L >= 3) {
         if (k < 4) coro(add, live, RO.call[k], L, RO.tonic, { solo: true });
         else coro(add, live, RO.resp[k - 4], L, RO.tonic, { harm: L >= 4 });
       }
       if (f.fill) { viradaPandeiro(add); [8, 10, 12, 13, 14].forEach((s) => add(s, 'palmas', { vel: 0.9 })); add(8, 'strum', { ms: RO.ch[k][1], dur: 6, vel: 0.9 }); }
-      return louder(ev, 1.4);
+      return louder(ev, 1.35);   // 1.4 in v1.2: trimmed for the same reason
     },
   });
 
@@ -832,7 +935,10 @@ const CHEMBEATS_TRACKS3_CONFIG = {
      L1 tantã, soft pandeiro, cuíca following the chords
      L2 + 6-string violão chords, 7-string bass and runs, repique de mão
      L3 + coro sings the melody (unison + octave), soft cavaquinho
-     L4 + coro harmony, banjo, palmas, busier cuíca */
+     L4 + coro harmony, banjo, palmas, busier cuíca
+     The chords and melodies already ran 8 bars. v1.3 adds rhythm variation: bars 5–8 get their own cuíca phrases,
+     teleco-teco shape, tantã, pandeiro and hand-drum patterns, odd bars answer the partido phrase, a small fill
+     at the end of bar 4 and a "virada" (with a rising cuíca) at the end of bar 8 */
   const CR = {
     tonic: 0,
     ch: [[[64, 67, 71, 72], [64, 67, 69, 72]], [[67, 69, 72, 76], [64, 67, 70, 73]], [[62, 65, 69, 72], [62, 65, 67, 71]], [[62, 64, 67, 71], [64, 67, 69, 73]],
@@ -850,37 +956,43 @@ const CHEMBEATS_TRACKS3_CONFIG = {
       [[0, 72, 4, 'a'], [8, 68, 2], [10, 71, 2], [12, 74, 2], [14, 71, 2]],
     ],
   };
-  const CR_CUICA = [[[2, 'up'], [3, 'dn'], [6, 'up', 0], [7, 'lo']], [[2, 'up'], [3, 'dn'], [5, 'hi'], [6, 'up'], [7, 'dn']]];
+  const CR_CUICA = [[[2, 'up'], [3, 'dn'], [6, 'up', 0], [7, 'lo']], [[2, 'up'], [3, 'dn'], [5, 'hi'], [6, 'up'], [7, 'dn']],
+                    [[3, 'up'], [4, 'dn'], [6, 'hi'], [7, 'lo']], [[2, 'hi'], [3, 'dn'], [5, 'up'], [7, 'dn']],   // bars 5–8, levels 1–3
+                    [[2, 'up'], [3, 'dn'], [4, 'hi'], [6, 'up'], [7, 'dn']]];                                    // bars 5–8, level 4
   CB.addTrack({
     id: 'crush', name: 'Covalent Crush', bpm: () => C3.CRUSH_BPM, filter: [3600, 5500, 9000, 15000], endChord: [48, 55, 64, 67, 69, 72],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 8, nk = (k + 1) % 8;
+      const { ev, add } = mk(), k = i % 8, nk = (k + 1) % 8, V8 = loopBars() === 8, B = V8 && k >= 4, PH = phrase(k, V8), TP = B ? TELE_B : TELE;
       const live = (s) => !(f.fill && s >= 8);
       if (f.enter) { add(0, 'tanta', { k: 'open', vel: 1 }); add(0, 'pandeiro', { k: 'S', vel: 0.9 }); add(0, 'cuica', { sh: 'up', f: mtof(72 + CR.root[k][0]), dur: 2, vel: 1 }); }
-      tantaFQ(add, live, Math.min(L, 3), k);
-      pandeiro(add, live, L === 1 ? 1 : 2, 0.8);
-      if (L >= 2) repmao(add, live, 3);
+      tantaFQ(add, live, Math.min(L, 3), k, B);
+      pandeiro(add, live, L === 1 ? 1 : 2, 0.8, B);
+      if (L >= 2) repmao(add, live, 3, B);
+      if (V8 && !f.fill && (k === 3 || k === 7)) {
+        viradaPag(add, L, k === 7);
+        if (k === 7) add(12, 'cuica', { sh: 'up', f: mtof(72), dur: 3, vel: 0.9 });   // cuíca rises into bar 1
+      }
       // cuíca tuned to each chord (players press the head to match the harmony)
       [0, 8].forEach((m, h) => {
-        const f0 = mtof(72 + CR.root[k][h]), pat = CR_CUICA[L >= 4 ? 1 : (k % 2)];
+        const f0 = mtof(72 + CR.root[k][h]), pat = CR_CUICA[B ? (L >= 4 ? 4 : 2 + k % 2) : (L >= 4 ? 1 : (k % 2))];
         pat.forEach(([s, sh]) => live(m + s) && add(m + s, 'cuica', { sh, f: f0, dur: 1.1, vel: 0.85 }));
       });
       if (L >= 2) {
         for (let s = 0; s < 16; s++) {   // 6-string violão: soft chord comping on the teleco-teco
-          if (!live(s) || !isIn(TELE, s)) continue;
+          if (!live(s) || !isIn(TP, s)) continue;
           add(s, 'strum', { inst: 'violao', ms: CR.ch[k][s < 8 ? 0 : 1].map((m) => m - 12), up: s % 2 === 1, dur: 1.6, vel: 0.4, pan: -0.25, spread: 0.014 });
         }
         violaoBass(add, live, L, CR, k, nk, !f.fill && (k % 2 === 1 || L >= 4));
       }
-      if (L >= 3) cordas(add, live, 'cav', CR.ch[k], TELE, { vel: 0.38 });
-      if (L >= 4) { cordas(add, live, 'banjo', CR.ch[k], PART, { vel: 0.45, open: 1 }); PART.forEach((s) => live(s) && add(s, 'palmas', { vel: 0.55 })); }
+      if (L >= 3) cordas(add, live, 'cav', CR.ch[k], TP, { vel: 0.38 });
+      if (L >= 4) { cordas(add, live, 'banjo', CR.ch[k], PH, { vel: 0.45, open: 1 }); PH.forEach((s) => live(s) && add(s, 'palmas', { vel: 0.55 })); }
       if (L >= 3) coro(add, live, CR.mel[k], L, CR.tonic, { harm: L >= 4 });
       if (f.fill) {
         viradaPandeiro(add);
         add(8, 'cuica', { sh: 'up', f: mtof(76), dur: 3, vel: 1 }); add(12, 'cuica', { sh: 'up', f: mtof(79), dur: 3, vel: 1 });
         run(CR.bass[k][1][0], CR.bass[nk][0][0] + 12, 6, CR.tonic).forEach((nm, j) => add(10 + j, 'pluck', { inst: 'violao', m: nm, dur: 1, vel: 0.85 }));
       }
-      return louder(ev, 1.35);
+      return louder(ev, 1.28);   // 1.35 in v1.2: trimmed for the same reason
     },
   });
 })(typeof window !== 'undefined' ? window : globalThis);
