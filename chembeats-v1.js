@@ -4,12 +4,16 @@
    Mr. Gibson's chemistry games. No audio files: everything is
    synthesized live with the Web Audio API (≈20 KB total).
 
-   Tracks:  "jersey"  Jersey Club bounce (140 BPM, F minor)
-            "rage"    Trap / Rage / Jersey hybrid (150 BPM, C minor)
+   Tracks:  "jersey"  Jersey Club bounce (140 BPM, F minor, 8-bar loop)
+            "rage"    Trap / Rage / Jersey hybrid (150 BPM, C minor, 8-bar loop)
    Each track has 4 intensity levels. Call setLevel() as the game
    gets harder; a 1-bar drum fill + riser plays before each level-up.
 
-   Version: Oct 18, 2026, v1.1
+   Version: Nov 8, 2026, v1.2
+   v1.2: tracks now loop over 8 bars instead of 4 (bars 5-8 = a related
+         "B section" with a different chord order, answer melody and drum
+         variations). New setting LOOP_BARS (8, or 4 for the old loop).
+         Added ChemBeats.lib.sec(i) for add-on track files. API unchanged.
    v1.1: adds ChemBeats.addVoice() + ChemBeats.lib so add-on track
          files (chembeats-tracks2.js) can bring their own instruments.
          Nothing else changed; games using v1 calls work as before.
@@ -24,6 +28,7 @@ const CHEMBEATS_CONFIG = {
   LEVEL_UP_FILL: true,         // true = 1-bar drum fill + riser before each new level
   CHROMEBOOK_GRIT: true,       // true = distort the 808s so bass is audible on laptop speakers
   FADE_SECONDS: 0.5,           // fade time when music starts or stops
+  LOOP_BARS: 8,                // how many bars before the music repeats: 8 = bars 5-8 vary (less boring), 4 = the old short loop
 };
 // =========================================================================
 
@@ -33,6 +38,8 @@ const CHEMBEATS_CONFIG = {
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const clampL = (n) => Math.max(1, Math.min(4, Math.round(n || 1)));
   const RES = new WeakMap();
+  // section of a bar: 0 = bars 1-4 (A), 1 = bars 5-8 (B). Always 0 if LOOP_BARS is 4. Tracks use it with k = i % 4.
+  const sec = (i) => (CFG.LOOP_BARS >= 8 ? (i >> 2) & 1 : 0);
 
   /* ---------- shared per-context resources (noise, hats, reverb) ---------- */
   function lcg(seed) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return (s / 4294967296) * 2 - 1; }; }
@@ -281,92 +288,121 @@ const CHEMBEATS_CONFIG = {
   function addTrack(def) { TRACKS[def.id] = def; }
   function mk() { const ev = []; return { ev, add: (s, v, p) => ev.push(Object.assign({ s, v }, p || {})) }; }
 
-  // ---- Track 1: Jersey Bounce (F minor: Fm – Db – Ab – Eb) ----
+  // ---- Track 1: Jersey Bounce (F minor: bars 1-4 Fm – Db – Ab – Eb, bars 5-8 Db – Ab – Eb – C) ----
+  // each list has 8 entries: bars 1-4 (A section) then bars 5-8 (B section; bar 8 = C major, the "V" that pulls back to Fm)
   const JZ = {
-    prog: [{ root: 41, ch: [65, 68, 72] }, { root: 37, ch: [65, 68, 73] }, { root: 44, ch: [63, 68, 72] }, { root: 39, ch: [63, 67, 70] }],
+    prog: [{ root: 41, ch: [65, 68, 72] }, { root: 37, ch: [65, 68, 73] }, { root: 44, ch: [63, 68, 72] }, { root: 39, ch: [63, 67, 70] },
+           { root: 37, ch: [65, 68, 73] }, { root: 44, ch: [63, 68, 72] }, { root: 39, ch: [63, 67, 70] }, { root: 36, ch: [64, 67, 72] }],
     hook: [
       [[0, 72], [3, 68], [6, 65], [8, 72], [11, 75], [14, 72]],
       [[0, 73], [3, 68], [6, 65], [8, 73], [11, 77], [14, 75]],
       [[0, 75], [3, 72], [6, 68], [8, 75], [11, 72], [14, 70]],
       [[0, 70], [3, 67], [6, 70], [8, 75], [11, 79], [14, 77]],
+      // B section: answer phrase, higher, different rhythm
+      [[0, 77], [3, 73], [6, 77], [9, 80], [12, 77], [14, 73]],
+      [[0, 75], [3, 72], [6, 75], [9, 80], [12, 77], [14, 75]],
+      [[0, 75], [3, 70], [6, 75], [9, 79], [12, 82], [14, 79]],
+      [[0, 79], [3, 76], [6, 72], [8, 76], [11, 79], [14, 77]],
     ],
   };
   addTrack({
     id: 'jersey', name: 'Jersey Bounce', bpm: () => CFG.JERSEY_BPM, filter: [900, 1900, 4500, 14000],
     endChord: [65, 68, 72],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, P = JZ.prog[k];
-      // KICK: classic 5-kick bounce 1, 2, 3, 3a, 4& ; level 4 adds a kick roll every 4th bar
-      const kicks = f.fill ? [0, 4, 8] : (L >= 4 && k === 3 ? [0, 4, 8, 11, 12, 13, 14, 15] : [0, 4, 8, 11, 14]);
+      const { ev, add } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, P = JZ.prog[bi];
+      // KICK: classic 5-kick bounce 1, 2, 3, 3a, 4& ; level 4 adds a kick roll every 4th bar (level 3+ in bar 8)
+      // B section: bar 6 kick moves 3a -> 3&; bar 8 gets the roll (level 3+) so the loop turns around
+      let kicks = [0, 4, 8, 11, 14];
+      if (S && k === 1) kicks = [0, 4, 8, 10, 14];
+      if (k === 3 && (S ? L >= 3 : L >= 4)) kicks = [0, 4, 8, 11, 12, 13, 14, 15];
+      if (f.fill) kicks = [0, 4, 8];
       kicks.forEach((s) => add(s, 'kick', { vel: s % 4 === 0 ? 1 : 0.85, duck: true }));
       // CLAP on 2 and 4
       add(4, 'clap');
       if (f.fill) { for (let s = 8; s < 16; s++) add(s, 'clap', { vel: 0.35 + 0.65 * (s - 8) / 7, freq: 1100 + (s - 8) * 180, dec: 0.08 }); add(0, 'riser', { dur: 16 }); }
-      else { add(12, 'clap'); if (L >= 4 && k % 2 === 1) add(14, 'clap', { vel: 0.55 }); }
+      else { add(12, 'clap'); if (L >= 4 && k % 2 === 1) add(14, 'clap', { vel: 0.55 }); if (S && L >= 3 && k % 2 === 0) add(15, 'clap', { vel: 0.3 }); }
       if (f.enter) add(0, 'impact');
       // BEDSPRING SQUEAKS on the offbeats (level 2+), extra pickups at level 3+
       if (L >= 2 && !f.fill) {
-        [2, 6, 10, 14].forEach((s, j) => add(s, 'squeak', { up: j % 2 === 0 }));
-        if (L >= 3) { add(7, 'squeak', { up: false, vel: 0.6 }); add(15, 'squeak', { up: true, vel: 0.6, f: 1300 }); }
+        [2, 6, 10, 14].forEach((s, j) => add(s, 'squeak', { up: (j % 2 === 0) !== (S === 1) }));   // B section: up/down swapped
+        if (L >= 3) { add(7, 'squeak', { up: !!S, vel: 0.6 }); add(15, 'squeak', { up: !S, vel: 0.6, f: 1300 }); }
       }
       // HATS: 8ths at L2, 16ths at L3+, open hats at L4
       if (L >= 2) for (let s = 0; s < (f.fill ? 8 : 16); s += (L >= 3 ? 1 : 2)) add(s, 'hat', { vel: s % 4 === 2 ? 0.7 : (s % 2 ? 0.35 : 0.5), pan: s % 2 ? -0.2 : 0.2 });
-      if (L >= 4 && !f.fill) { add(6, 'hat', { open: true, vel: 0.45 }); add(14, 'hat', { open: true, vel: 0.45 }); }
+      if (L >= 4 && !f.fill) { add(S ? 10 : 6, 'hat', { open: true, vel: 0.45 }); add(14, 'hat', { open: true, vel: 0.45 }); }
       // BASS follows the kick bounce (octave jump on 3a)
       if (L === 1) { add(0, 'jbass', { m: P.root, dur: 6 }); add(8, 'jbass', { m: P.root, dur: 6 }); }
-      else (f.fill ? [0, 4, 8] : [0, 4, 8, 11, 14]).forEach((s) => add(s, 'jbass', { m: s === 11 ? P.root + 12 : P.root, dur: 2.5 }));
+      else (f.fill ? [0, 4, 8] : (S && k === 1 ? [0, 4, 8, 10, 14] : [0, 4, 8, 11, 14])).forEach((s) => add(s, 'jbass', { m: s === 11 ? P.root + 12 : (S && s === 14 && k % 2 === 0 ? P.root + 7 : P.root), dur: 2.5 }));   // B section: fifth on 4& in bars 5 and 7
       // HARMONY: soft pad (L1–2) → pad + bounce stabs (L3+)
       add(0, 'pad', { ms: P.ch, dur: 16, vel: L >= 3 ? 0.5 : 1 });
-      if (L >= 3) (f.fill ? [0, 3] : [0, 3, 8, 11]).forEach((s) => add(s, 'stab', { ms: P.ch, dur: 1.5 }));
+      if (L >= 3) (f.fill ? [0, 3] : (S ? [0, 3, 8, 11, 14] : [0, 3, 8, 11])).forEach((s) => add(s, 'stab', { ms: P.ch, dur: 1.5 }));
       // HOOK (L3+)
-      if (L >= 3) JZ.hook[k].forEach(([s, m]) => { if (!(f.fill && s >= 8)) add(s, 'lead', { m, dur: 2 }); });
+      if (L >= 3) JZ.hook[bi].forEach(([s, m]) => { if (!(f.fill && s >= 8)) add(s, 'lead', { m, dur: 2 }); });
       // VOCAL CHOPS (L4)
       if (L >= 4 && !f.fill) {
-        const pat = k % 2 === 0 ? [[3, 'ah', 0], [6, 'ah', 0], [11, 'eh', 2]] : [[3, 'ah', 0], [6, 'eh', 1], [10, 'oh', 2], [14, 'ah', 0]];
+        const pat = S ? (k % 2 === 0 ? [[2, 'oh', 1], [6, 'ah', 0], [10, 'eh', 2], [14, 'ah', 1]] : [[3, 'eh', 1], [7, 'ah', 0], [11, 'oh', 2]])
+                      : (k % 2 === 0 ? [[3, 'ah', 0], [6, 'ah', 0], [11, 'eh', 2]] : [[3, 'ah', 0], [6, 'eh', 1], [10, 'oh', 2], [14, 'ah', 0]]);
         pat.forEach(([s, vow, ci]) => add(s, 'vox', { m: P.ch[ci] - 12, vow, dur: 2 }));
       }
       return ev;
     },
   });
 
-  // ---- Track 2: Rage Reactor (C minor: Cm – Ab – Fm – G) ----
+  // ---- Track 2: Rage Reactor (C minor: bars 1-4 Cm – Ab – Fm – G, bars 5-8 Ab – Fm – Eb – Db) ----
+  // each list has 8 entries: bars 1-4 (A section) then bars 5-8 (B section; bar 8 = Db, the dark "bII" chord that pulls back down to Cm)
   const RG = {
-    prog: [{ root: 36, ch: [60, 63, 67] }, { root: 44, ch: [60, 63, 68] }, { root: 41, ch: [60, 65, 68] }, { root: 43, ch: [59, 62, 67] }],
+    prog: [{ root: 36, ch: [60, 63, 67] }, { root: 44, ch: [60, 63, 68] }, { root: 41, ch: [60, 65, 68] }, { root: 43, ch: [59, 62, 67] },
+           { root: 44, ch: [60, 63, 68] }, { root: 41, ch: [60, 65, 68] }, { root: 39, ch: [58, 63, 67] }, { root: 37, ch: [61, 65, 68] }],
     // [step, midi note, length in steps, glide from previous note?]
     b808: [
       [[0, 36, 6], [6, 36, 4], [10, 39, 3, 1], [13, 43, 3, 1]],
       [[0, 44, 6], [6, 44, 4], [10, 48, 2, 1], [12, 46, 4, 1]],
       [[0, 41, 6], [6, 41, 4], [10, 44, 3, 1], [13, 48, 3, 1]],
       [[0, 43, 6], [6, 43, 2], [8, 47, 3, 1], [11, 50, 3, 1], [14, 43, 2, 1]],
+      // B section
+      [[0, 44, 5], [5, 44, 3], [8, 48, 3, 1], [11, 51, 2, 1], [13, 48, 3, 1]],
+      [[0, 41, 6], [6, 41, 2], [8, 44, 4, 1], [12, 48, 2, 1], [14, 46, 2, 1]],
+      [[0, 39, 6], [6, 39, 4], [10, 43, 3, 1], [13, 46, 3, 1]],
+      [[0, 37, 4], [4, 37, 2], [6, 37, 2], [8, 44, 2, 1], [10, 41, 2, 1], [12, 37, 2, 1], [14, 35, 2, 1]],   // bar 8: ends on B, a half step under C
     ],
     lead: [
       [[0, 79], [3, 75], [6, 72], [8, 79], [10, 75], [12, 74], [14, 75]],
       [[0, 80], [3, 75], [6, 72], [8, 80], [10, 75], [12, 79], [14, 77]],
       [[0, 80], [3, 77], [6, 72], [8, 80], [10, 77], [12, 75], [14, 72]],
       [[0, 79], [3, 74], [6, 71], [8, 79], [10, 74], [12, 77], [14, 74]],
+      // B section: answer phrase, higher, different rhythm
+      [[0, 84], [2, 80], [5, 75], [8, 80], [10, 84], [12, 82], [14, 80]],
+      [[0, 84], [2, 80], [5, 77], [8, 80], [10, 77], [12, 75], [14, 77]],
+      [[0, 82], [2, 79], [5, 75], [8, 79], [10, 82], [12, 84], [14, 82]],
+      [[0, 84], [2, 80], [4, 77], [6, 73], [8, 77], [10, 80], [12, 77], [14, 72]],
     ],
     // hi-hat rolls at level 3+: [start step, length in steps, hits per 16th, start pitch, end pitch]
     // hits per 16th: 1.5 = 16th triplets, 2 = 1/32, 3 = 1/32 triplets, 6 = 1/64 triplets
-    rolls: [[6, 2, 3, 0, 5], [12, 4, 2, 7, -5], [10, 2, 3, -3, 7], [12, 4, 3, 0, 12]],
+    rolls: [[6, 2, 3, 0, 5], [12, 4, 2, 7, -5], [10, 2, 3, -3, 7], [12, 4, 3, 0, 12],
+            [10, 2, 3, 0, 7], [6, 2, 3, 5, -3], [12, 4, 2, 0, 10], [8, 8, 2, 0, 12]],   // B section; bar 8 = long build back to bar 1
   };
   addTrack({
     id: 'rage', name: 'Rage Reactor', bpm: () => CFG.RAGE_BPM, filter: [1200, 2600, 6500, 14000],
     endChord: [60, 63, 67],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, P = RG.prog[k], dbl = L >= 4;
-      // KICKS on the downbeats (punch layered with the 808)
+      const { ev, add } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, P = RG.prog[bi], dbl = L >= 4;
+      // KICKS on the downbeats (punch layered with the 808); B section kicks follow the new 808 rhythm
       add(0, 'kick', { vel: 1.2, lo: 42, dec: 0.28 });
-      if (!f.fill) { if (L >= 2) add(10, 'kick', { vel: 1, lo: 42, dec: 0.25 }); if (dbl) add(7, 'kick', { vel: 1, lo: 42, dec: 0.25 }); }
+      if (!f.fill) { if (L >= 2) add(S && k !== 2 ? 8 : 10, 'kick', { vel: 1, lo: 42, dec: 0.25 }); if (dbl) add(S ? (k === 0 ? 5 : 6) : 7, 'kick', { vel: 1, lo: 42, dec: 0.25 }); }
       // SNARE/CLAP: half-time (beat 3) at L1–3, double-time (2 & 4) at L4
       if (f.fill) {
         [[8, 0.5], [10, 0.55], [12, 0.6], [13, 0.65], [14, 0.7], [14.5, 0.75], [15, 0.85], [15.5, 1]].forEach(([s, v], j) => add(s, 'snare', { vel: v, pitch: 190 + j * 25, dec: 0.1 }));
         add(dbl ? 4 : 8, 'clap'); add(0, 'riser', { dur: 16 });
-      } else (dbl ? [4, 12] : [8]).forEach((s) => { add(s, 'clap'); add(s, 'snare', { vel: 0.45 }); });
+      } else {
+        (dbl ? [4, 12] : [8]).forEach((s) => { add(s, 'clap'); add(s, 'snare', { vel: 0.45 }); });
+        if (S && L >= 3 && k % 2 === 1) add(14, 'snare', { vel: 0.25, dec: 0.08 });                                  // B section ghost snare
+        if (S && k === 3 && L >= 2) [13, 14, 14.5, 15].forEach((s, j) => add(s, 'snare', { vel: 0.3 + j * 0.1, dec: 0.08 }));   // small fill into bar 1
+      }
       if (f.enter) add(0, 'impact');
       // 808 BASSLINE = the melody (sliding, distorted, higher register)
       if (L === 1) { add(0, 'b808', { m: P.root, dur: 10, drive: 1.6 }); if (!f.fill) add(10, 'b808', { m: P.root, dur: 6, drive: 1.6 }); }
       else {
-        const pat = RG.b808[k], drive = L === 2 ? 3 : 6;
+        const pat = RG.b808[bi], drive = L === 2 ? 3 : 6;
         pat.forEach((n, j) => { if (!(f.fill && n[0] >= 8)) add(n[0], 'b808', { m: n[1], dur: n[2], from: n[3] ? pat[j - 1][1] : null, drive }); });
       }
       if (f.fill) add(8, 'b808', { m: P.root + 12, from: P.root, glide: 7, dur: 8, drive: L === 1 ? 2 : 5 }); // long slide up into the drop
@@ -377,20 +413,20 @@ const CHEMBEATS_CONFIG = {
       };
       const busy = [];
       if (f.fill) { roll(8, 8, 2, 0, 12, 0.5); busy.push([8, 16]); }
-      else if (L === 2 && k % 2 === 1) { roll(12, 4, 1.5, 0, 0); busy.push([12, 16]); }
+      else if (L === 2 && k % 2 === 1) { const r = S ? (k === 3 ? [12, 4, 2, 0, 7] : [10, 2, 1.5, 0, 0]) : [12, 4, 1.5, 0, 0]; roll(r[0], r[1], r[2], r[3], r[4]); busy.push([r[0], r[0] + r[1]]); }
       else if (L >= 3) {
-        const r = RG.rolls[k]; roll(r[0], r[1], r[2], r[3], r[4]); busy.push([r[0], r[0] + r[1]]);
-        if (dbl) { const z = k % 2 === 0 ? [3, 12, 0] : [5, 0, 12]; roll(z[0], 1, 6, z[1], z[2], 0.35); busy.push([z[0], z[0] + 1]); }
+        const r = RG.rolls[bi]; roll(r[0], r[1], r[2], r[3], r[4]); busy.push([r[0], r[0] + r[1]]);
+        if (dbl && !(S && k === 3)) { const z = (k % 2 === 0) !== (S === 1) ? [3, 12, 0] : [5, 0, 12]; roll(z[0], 1, 6, z[1], z[2], 0.35); busy.push([z[0], z[0] + 1]); }
       }
       const free = (s) => !busy.some(([a, b]) => s >= a && s < b);
       for (let s = 0; s < 16; s += (L === 1 ? 2 : 1)) if (free(s)) add(s, 'hat', { vel: s % 4 === 0 ? 0.6 : (s % 2 ? 0.35 : 0.5), pan: s % 2 ? -0.15 : 0.15 });
-      if (dbl && !f.fill && k % 2 === 0 && free(14)) add(14, 'hat', { open: true, vel: 0.45 });
+      if (dbl && !f.fill && (S ? k % 2 === 1 && free(10) : k % 2 === 0 && free(14))) add(S ? 10 : 14, 'hat', { open: true, vel: 0.45 });
       // HARMONY: dark pad (L1–3), FM bell arps (L1–2)
       if (L <= 3) add(0, 'pad', { ms: P.ch, dur: 16, vel: L === 3 ? 0.6 : 1 });
-      if (L <= 2) { const arp = [P.ch[0] + 12, P.ch[1] + 12, P.ch[2] + 12, P.ch[1] + 12], st = L === 1 ? 4 : 2; for (let s = 0, j = 0; s < 16; s += st, j++) add(s, 'bell', { m: arp[j % 4], vel: 0.8 }); }
+      if (L <= 2) { const arp = S ? [P.ch[2] + 12, P.ch[1] + 12, P.ch[0] + 12, P.ch[1] + 12] : [P.ch[0] + 12, P.ch[1] + 12, P.ch[2] + 12, P.ch[1] + 12], st = L === 1 ? 4 : 2; for (let s = 0, j = 0; s < 16; s += st, j++) add(s, 'bell', { m: arp[j % 4], vel: 0.8 }); }
       // RAGE LEAD (L3+), octave-doubled at L4
       if (L >= 3) {
-        const ln = RG.lead[k];
+        const ln = RG.lead[bi];
         ln.forEach(([s, m], j) => {
           if (f.fill && s >= 8) return;
           const dur = (j + 1 < ln.length ? ln[j + 1][0] : 16) - s;
@@ -500,7 +536,7 @@ const CHEMBEATS_CONFIG = {
     setVolume(v) { st.volume = Math.max(0, Math.min(1, v)); if (master) master.out.gain.setTargetAtTime(st.volume, ctx.currentTime, 0.05); },
     /** For add-on files: register a new instrument, and the helpers the built-in ones use. */
     addVoice(name, fn) { V[name] = fn; },
-    lib: { mtof, osc, gn, noise, send, bend, curve, resources, V },
+    lib: { mtof, osc, gn, noise, send, bend, curve, resources, V, sec },
     tracks() { return Object.values(TRACKS).map((t) => ({ id: t.id, name: t.name, bpm: t.bpm() })); },
     addTrack,
     /** Events for one bar (for drawing a step grid). */

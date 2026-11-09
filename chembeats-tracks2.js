@@ -14,7 +14,10 @@
      'stutter'     Stutter Catalyst  Neptunes/Timbaland-style: stutter kicks, beatbox, clav
    All original patterns. Same API as v1: ChemBeats.play('drill', 1), setLevel(1–4), etc.
 
-   Version: Oct 18, 2026, v1
+   Version: Nov 8, 2026, v1.1
+   v1.1: every track loops over 8 bars (bars 5-8 = a related B section: new chord
+         order, answer melody, drum variations). Loop length comes from
+         LOOP_BARS in chembeats-v1.js (8, or 4 for the old loop).
    ===================================================================== */
 
 // ========================= CONFIG (safe to edit) =========================
@@ -38,6 +41,7 @@ const CHEMBEATS_TRACKS2_CONFIG = {
   if (!CB || !CB.addVoice) { console.warn('chembeats-tracks2: load chembeats-v1.js (v1.1 or newer) first'); return; }
   const C2 = CHEMBEATS_TRACKS2_CONFIG;
   const { mtof, osc, gn, noise, send, curve } = CB.lib;
+  const sec = CB.lib.sec || (() => 0);   // 0 = bars 1-4 (A), 1 = bars 5-8 (B); needs chembeats-v1.js v1.2, else old 4-bar loop
   const RES2 = new WeakMap();
   const env = (g, t, v, a, d) => { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.001, t + a + d); };
   const filt = (c, type, f, q, db) => { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; if (q != null) x.Q.value = q; if (db != null) x.gain.value = db; return x; };
@@ -274,44 +278,54 @@ const CHEMBEATS_TRACKS2_CONFIG = {
   }
 
   /* ===================== Track 3: Glide Reaction (drill) =====================
-     G harmonic minor with a flat-2 color: Gm – Gm – E♭ – D. Half-time.
-     Snare on beat 3 in bars 1 and 3; pushed to 3& (bar 2) and to 4 (bar 4). */
+     G harmonic minor with a flat-2 color: bars 1-4 Gm – Gm – E♭ – D, bars 5-8 E♭ – D – Cm – D. Half-time.
+     Snare on beat 3 in bars 1 and 3; pushed to 3& (bar 2) and to 4 (bar 4).
+     (Every list below has 8 entries: bars 1-4 = A section, bars 5-8 = B section; bar 8 = D, the "V" back to Gm.) */
   const DR = {
-    roots: [43, 43, 39, 38],
-    pad: [[55, 58, 62], [55, 58, 63], [55, 58, 63], [54, 57, 62]],
-    snare: [[8], [10], [8], [12, 15]],
+    roots: [43, 43, 39, 38, 39, 38, 36, 38],
+    pad: [[55, 58, 62], [55, 58, 63], [55, 58, 63], [54, 57, 62], [55, 58, 63], [54, 57, 62], [55, 60, 63], [54, 57, 60]],
+    snare: [[8], [10], [8], [12, 15], [10], [8], [12], [8, 13, 15]],
+    kick2: [[], [13], [], [13], [13], [11], [13], [10, 13]],   // extra kick at level 2+ (not in the fill)
     // 808: [step, length, path [[offset, midi], ...]]  (≥ +13 semitones = multi-octave, used at level 3+)
     b808: [
       [[0, 5, [[0, 43]]], [6, 4, [[0, 43], [3, 55]]], [10, 6, [[0, 55], [3, 43]]]],
       [[0, 5, [[0, 43]]], [6, 3, [[0, 46]]], [9, 7, [[0, 46], [3, 70], [6, 43]]]],
       [[0, 5, [[0, 39]]], [6, 4, [[0, 39], [3, 51]]], [10, 6, [[0, 51], [3, 39], [5, 41]]]],
       [[0, 5, [[0, 38]]], [6, 3, [[0, 38]]], [9, 7, [[0, 38], [3, 62], [6, 38]]]],
+      [[0, 4, [[0, 39]]], [5, 3, [[0, 39], [2, 43]]], [8, 8, [[0, 43], [3, 63], [6, 39]]]],
+      [[0, 5, [[0, 38]]], [6, 4, [[0, 38], [3, 50]]], [10, 6, [[0, 50], [3, 38], [5, 36]]]],
+      [[0, 5, [[0, 36]]], [6, 3, [[0, 36]]], [9, 7, [[0, 36], [3, 60], [6, 36]]]],
+      [[0, 4, [[0, 38]]], [5, 3, [[0, 38], [2, 45]]], [8, 4, [[0, 45], [3, 38]]], [12, 4, [[0, 38], [3, 50]]]],
     ],
     mel: [
       [[0, 74], [3, 75], [6, 74], [8, 70], [11, 67], [14, 68]],
       [[0, 67], [3, 70], [6, 74], [10, 75], [12, 74]],
       [[0, 75], [3, 74], [6, 70], [8, 67], [11, 70], [14, 72]],
       [[0, 74], [3, 72], [6, 70], [8, 66], [11, 69], [14, 66]],
+      [[0, 70], [3, 67], [6, 70], [8, 75], [11, 74], [14, 70]],
+      [[0, 69], [3, 66], [6, 69], [10, 74], [12, 72]],
+      [[0, 72], [3, 75], [6, 72], [8, 67], [11, 70], [14, 75]],
+      [[0, 74], [3, 72], [6, 69], [8, 66], [11, 69], [14, 67]],
     ],
   };
   CB.addTrack({
     id: 'drill', name: 'Glide Reaction', bpm: () => C2.DRILL_BPM, filter: [1000, 2200, 6000, 14000], endChord: [55, 58, 62],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, R = DR.roots[k], roll = roller(add);
+      const { ev, add } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, R = DR.roots[bi], roll = roller(add);
       if (f.enter) add(0, 'impact');
       // kick: sparse, layered with the 808
       add(0, 'kick', { vel: 1.1, lo: 44, dec: 0.25 });
-      if (L >= 2 && !f.fill && k % 2 === 1) add(13, 'kick', { vel: 0.8, lo: 44, dec: 0.2 });
+      if (L >= 2 && !f.fill) DR.kick2[bi].forEach((s) => add(s, 'kick', { vel: 0.8, lo: 44, dec: 0.2 }));
       // snares: delayed, sliding bounce
       if (f.fill) { [8, 9, 10, 11, 12, 13, 14, 14.67, 15.33].forEach((s, j) => add(s, 'snare', { vel: 0.4 + j * 0.07, pitch: 210 + j * 15, dec: 0.1 })); add(0, 'riser', { dur: 16 }); }
       else {
-        DR.snare[k].forEach((s, j) => { add(s, 'clap', { vel: j ? 0.6 : 1 }); add(s, 'snare', { vel: j ? 0.3 : 0.55 }); });
-        if (L >= 3 && k === 1) add(9, 'snare', { vel: 0.3, dec: 0.08 });          // stutter before the late snare
-        if (L >= 2) [6, 14].forEach((s) => add(s, 'rim', { vel: 0.6 }));
+        DR.snare[bi].forEach((s, j) => { add(s, 'clap', { vel: j ? 0.6 : 1 }); add(s, 'snare', { vel: j ? 0.3 : 0.55 }); });
+        if (L >= 3 && k === 1) add(S ? 7 : 9, 'snare', { vel: 0.3, dec: 0.08 });  // stutter before the late snare
+        if (L >= 2) (S ? [6, 15] : [6, 14]).forEach((s) => add(s, 'rim', { vel: 0.6 }));
       }
       // 808 slides (one octave max below level 3)
       if (L === 1) { add(0, 'slide', { path: [[0, R]], dur: 10 }); if (!f.fill) add(12, 'slide', { path: [[0, R]], dur: 4 }); }
-      else DR.b808[k].forEach(([s, d, path]) => {
+      else DR.b808[bi].forEach(([s, d, path]) => {
         if (f.fill && s >= 8) return;
         const pp = path.map(([o, m]) => [o, L < 3 && m > R + 12 ? m - 12 : m]);
         add(s, 'slide', { path: pp, dur: d, drive: L >= 4 ? 3 : 2.2 });
@@ -321,38 +335,41 @@ const CHEMBEATS_TRACKS2_CONFIG = {
       const busy = [];
       if (f.fill) { roll(8, 8, 3, 0, 12, 0.45); busy.push([8, 16]); }
       else if (L >= 3) {
-        const r = [[6, 2, 1.5, 0, 0], [14, 2, 3, 0, 7], [10, 2, 1.5, 0, 0], [12, 4, 3, 7, -5]][k];
+        const r = [[6, 2, 1.5, 0, 0], [14, 2, 3, 0, 7], [10, 2, 1.5, 0, 0], [12, 4, 3, 7, -5],
+                   [12, 2, 3, 0, 7], [6, 2, 3, 0, 0], [10, 2, 1.5, 0, 0], [10, 6, 2, 0, 12]][bi];
         roll(r[0], r[1], r[2], r[3], r[4]); busy.push([r[0], r[0] + r[1]]);
-        if (L >= 4 && k % 2 === 0) { roll(3, 1, 3, 12, 0, 0.35); busy.push([3, 4]); }
+        if (L >= 4 && k % 2 === (S ? 1 : 0)) { const z = S ? 5 : 3; roll(z, 1, 3, 12, 0, 0.35); busy.push([z, z + 1]); }
       }
       const free = (s) => !busy.some(([a, b]) => s >= a && s < b);
-      const hs = L === 1 ? [0, 4, 8, 12] : [0, 3, 6, 8, 11, 14];
+      const hs = L === 1 ? [0, 4, 8, 12] : (S && k % 2 === 1 ? [0, 3, 6, 8, 10, 12, 14] : [0, 3, 6, 8, 11, 14]);
       hs.forEach((s) => free(s) && add(s, 'hat', { vel: s % 8 === 0 ? 0.85 : 0.62, pan: s % 2 ? -0.2 : 0.2 }));
-      if (L >= 2) [2, 10].forEach((s) => free(s) && add(s, 'hat', { vel: 0.38 }));
+      if (L >= 2) (S ? [2, 9] : [2, 10]).forEach((s) => free(s) && add(s, 'hat', { vel: 0.38 }));
       // harmony + melody
-      add(0, 'pad', { ms: DR.pad[k], dur: 16, vel: L >= 3 ? 0.55 : 0.9 });
-      if (L >= 3) DR.mel[k].forEach(([s, m]) => { if (!(f.fill && s >= 8)) { add(s, 'keys', { m, vel: 0.9 }); if (L >= 4) add(s, 'keys', { m: m + 12, vel: 0.3, dec: 0.8 }); } });
-      if (L >= 4 && !f.fill) add(0, 'vox', { m: DR.pad[k][2] - 12, vow: 'oh', dur: 6, vel: 0.5 });
+      add(0, 'pad', { ms: DR.pad[bi], dur: 16, vel: L >= 3 ? 0.55 : 0.9 });
+      if (L >= 3) DR.mel[bi].forEach(([s, m]) => { if (!(f.fill && s >= 8)) { add(s, 'keys', { m, vel: 0.9 }); if (L >= 4) add(s, 'keys', { m: m + 12, vel: 0.3, dec: 0.8 }); } });
+      if (L >= 4 && !f.fill) add(0, 'vox', { m: DR.pad[bi][2] - 12, vow: S ? 'ah' : 'oh', dur: 6, vel: 0.5 });
       return ev;
     },
   });
 
   /* ================== Track 4: Throwback Trap (2014–16 style) ==================
-     A minor: Am – F – Dm – E. Clean sub ONLY on root kicks; claps rigid on beat 3
-     (2 and 4 at level 4). Bells in quarter-note triplets = triplet-over-duple. */
+     A minor: bars 1-4 Am – F – Dm – E, bars 5-8 Dm – B♭ – G – E. Clean sub ONLY on root kicks; claps rigid
+     on beat 3 (2 and 4 at level 4). Bells in quarter-note triplets = triplet-over-duple.
+     (Lists have 8 entries: bars 1-4 = A section, bars 5-8 = B section; bar 8 = E7, the "V" back to Am.) */
   const TT = {
-    roots: [33, 29, 38, 40],
-    ch: [[69, 72, 76], [69, 72, 77], [69, 74, 77], [68, 71, 76]],
-    kicks: [[0, 7, 10], [0, 3, 10, 14], [0, 7, 10], [0, 6, 10, 11]],
-    brass: [[[0, 3], [6, 2], [10, 4]], [[0, 3], [3, 3], [8, 6]], [[0, 3], [6, 2], [10, 4]], [[0, 2], [3, 2], [6, 2], [11, 5]]],
+    roots: [33, 29, 38, 40, 38, 34, 31, 40],
+    ch: [[69, 72, 76], [69, 72, 77], [69, 74, 77], [68, 71, 76], [69, 74, 77], [70, 74, 77], [67, 71, 74], [68, 71, 74]],
+    kicks: [[0, 7, 10], [0, 3, 10, 14], [0, 7, 10], [0, 6, 10, 11], [0, 3, 10], [0, 7, 10], [0, 6, 10, 14], [0, 3, 10, 12, 14]],
+    brass: [[[0, 3], [6, 2], [10, 4]], [[0, 3], [3, 3], [8, 6]], [[0, 3], [6, 2], [10, 4]], [[0, 2], [3, 2], [6, 2], [11, 5]],
+            [[0, 3], [3, 3], [8, 6]], [[0, 2], [4, 2], [10, 4]], [[0, 3], [6, 2], [10, 2], [13, 3]], [[0, 2], [3, 2], [6, 2], [8, 2], [11, 5]]],
   };
   CB.addTrack({
     id: 'trap16', name: 'Throwback Trap', bpm: () => C2.TRAP16_BPM, filter: [1100, 2400, 6000, 14000], endChord: [57, 60, 64],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, R = TT.roots[k], roll = roller(add), dbl = L >= 4;
+      const { ev, add } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, R = TT.roots[bi], roll = roller(add), dbl = L >= 4;
       if (f.enter) add(0, 'impact');
       // kick + sub locked together (sub holds until the next kick)
-      let kicks = L === 1 ? [0, 10] : TT.kicks[k];
+      let kicks = L === 1 ? [0, 10] : TT.kicks[bi];
       if (f.fill) kicks = kicks.filter((s) => s < 8);
       kicks.forEach((s, j) => {
         const nx = j + 1 < kicks.length ? kicks[j + 1] : 16;
@@ -361,24 +378,30 @@ const CHEMBEATS_TRACKS2_CONFIG = {
       });
       // claps: rigid
       if (f.fill) { [8, 10, 12, 13, 14, 15].forEach((s, j) => add(s, 'clap', { vel: 0.45 + j * 0.1, dec: 0.1 })); add(0, 'riser', { dur: 16, vel: 0.8 }); }
-      else (dbl ? [4, 12] : [8]).forEach((s) => add(s, 'clap'));
+      else {
+        (dbl ? [4, 12] : [8]).forEach((s) => add(s, 'clap'));
+        if (S && L >= 3 && k !== 3) add(15, 'clap', { vel: 0.3, dec: 0.1 });                                     // B section ghost clap
+        if (S && k === 3 && L >= 2) [13, 14, 15].forEach((s, j) => add(s, 'clap', { vel: 0.4 + j * 0.15, dec: 0.1 }));   // small fill into bar 1
+      }
       // hats: straight 16ths, straight 1/32 rolls (no pitch bend), triplet hats at L4
       const busy = [];
       if (f.fill) { roll(8, 8, 2, 0, 0, 0.45); busy.push([8, 16]); }
-      else if (L >= 3 && k % 2 === 1) { roll(12, 4, 2, 0, 0, 0.45); busy.push([12, 16]); }
-      else if (L >= 3 && k === 2) { roll(6, 2, 2, 0, 0, 0.4); busy.push([6, 8]); }
+      else if (L >= 3 && (S || k % 2 === 1 || k === 2)) {
+        const r = S ? [[6, 2], [14, 2], [12, 4], [10, 6]][k] : (k % 2 === 1 ? [12, 4] : [6, 2]);
+        roll(r[0], r[1], 2, 0, 0, k === 2 && !S ? 0.4 : 0.45); busy.push([r[0], r[0] + r[1]]);
+      }
       if (dbl && k === 0 && !f.fill) { roll(8, 8, 0.75, 0, 0, 0.6); busy.push([8, 16]); }   // 8th-note triplets over the duple grid
       const free = (s) => !busy.some(([a, b]) => s >= a && s < b);
       for (let s = 0; s < 16; s += (L === 1 ? 2 : 1)) if (free(s)) add(s, 'hat', { vel: s % 4 === 0 ? 0.55 : (s % 2 ? 0.3 : 0.45), pan: s % 2 ? -0.15 : 0.15 });
-      if (dbl && k % 2 === 1 && free(6)) add(6, 'hat', { open: true, vel: 0.4 });
+      if (dbl && k % 2 === 1 && free(S ? 10 : 6)) add(S ? 10 : 6, 'hat', { open: true, vel: 0.4 });
       // bells in quarter-note triplets (6 per bar)
-      const arp = [TT.ch[k][0] + 12, TT.ch[k][2], TT.ch[k][1], TT.ch[k][0], TT.ch[k][1], TT.ch[k][2]];
+      const C = TT.ch[bi], arp = S ? [C[2], C[1], C[0] + 12, C[2], C[1], C[0]] : [C[0] + 12, C[2], C[1], C[0], C[1], C[2]];
       for (let j = 0; j < 6; j++) { const s = j * 16 / 6; if (!(f.fill && s >= 8)) add(s, 'bell', { m: arp[j], vel: L >= 3 ? 0.55 : 0.8 }); }
-      add(0, 'pad', { ms: TT.ch[k].map((m) => m - 12), dur: 16, vel: L >= 3 ? 0.5 : 0.8 });
+      add(0, 'pad', { ms: C.map((m) => m - 12), dur: 16, vel: L >= 3 ? 0.5 : 0.8 });
       // brass stabs (L3+), octave doubled at L4
-      if (L >= 3) TT.brass[k].forEach(([s, d]) => {
+      if (L >= 3) TT.brass[bi].forEach(([s, d]) => {
         if (f.fill && s >= 8) return;
-        const ms = TT.ch[k].map((m) => m - 12);
+        const ms = C.map((m) => m - 12);
         add(s, 'brass', { ms, dur: d * 0.8 });
         if (dbl) add(s, 'brass', { ms: [ms[0] - 12], dur: d * 0.8, vel: 0.8 });
       });
@@ -387,25 +410,31 @@ const CHEMBEATS_TRACKS2_CONFIG = {
   });
 
   /* ==================== Track 5: Boom-Bap Beaker (90s/early 2000s) ====================
-     F minor jazz loop: Fm9 – E♭maj9 – D♭maj9 – C7(♭9). Standard time, MPC swing on 16ths,
-     snare a hair behind the beat. Two tempos: 'boombap' (calm) and 'boombap-up' (gameplay). */
+     F minor jazz loop: bars 1-4 Fm9 – E♭maj9 – D♭maj9 – C7(♭9), bars 5-8 B♭m9 – A♭maj9 – Gm7(♭5) – C7(♭9).
+     Standard time, MPC swing on 16ths, snare a hair behind the beat.
+     Two tempos: 'boombap' (calm) and 'boombap-up' (gameplay).
+     (Lists have 8 entries: bars 1-4 = A section, bars 5-8 = B section; bar 8 = C7♭9, the "V" back to Fm.) */
   const BB = {
-    roots: [41, 39, 37, 36],
-    ch: [[56, 60, 63, 67], [55, 58, 62, 65], [53, 56, 60, 63], [52, 55, 58, 61]],
-    kick: [[0, 7, 10], [0, 6, 10, 15], [0, 7, 10], [0, 2, 10, 11]],
+    roots: [41, 39, 37, 36, 34, 44, 43, 36],
+    ch: [[56, 60, 63, 67], [55, 58, 62, 65], [53, 56, 60, 63], [52, 55, 58, 61], [61, 65, 68, 72], [55, 58, 60, 63], [58, 61, 65, 67], [55, 58, 61, 64]],
+    kick: [[0, 7, 10], [0, 6, 10, 15], [0, 7, 10], [0, 2, 10, 11], [0, 3, 10], [0, 7, 10, 14], [0, 3, 7, 10], [0, 7, 10, 14, 15]],
     bass: [[[0, 41, 3], [7, 41, 2], [10, 48, 2], [14, 46, 2]], [[0, 39, 3], [6, 39, 2], [10, 46, 3], [15, 37, 1]],
-           [[0, 37, 3], [7, 37, 2], [10, 44, 2], [14, 39, 2]], [[0, 36, 3], [2, 36, 2], [10, 43, 1], [11, 40, 3], [14, 41, 2]]],
+           [[0, 37, 3], [7, 37, 2], [10, 44, 2], [14, 39, 2]], [[0, 36, 3], [2, 36, 2], [10, 43, 1], [11, 40, 3], [14, 41, 2]],
+           [[0, 34, 3], [7, 34, 2], [10, 41, 2], [14, 39, 2]], [[0, 44, 3], [7, 44, 2], [10, 51, 2], [14, 48, 2]],
+           [[0, 43, 3], [6, 43, 2], [10, 49, 2], [14, 46, 2]], [[0, 36, 3], [6, 36, 2], [10, 43, 2], [13, 40, 1], [14, 37, 2]]],
     flute: [[[0, 84, 3], [3, 82, 1], [4, 80, 4], [10, 77, 2], [12, 80, 4]], [[0, 82, 3], [3, 79, 1], [4, 77, 6], [12, 75, 4]],
-            [[0, 80, 3], [3, 77, 1], [4, 75, 2], [6, 77, 2], [8, 80, 6], [14, 84, 2]], [[0, 82, 4], [4, 79, 2], [6, 76, 6], [12, 77, 4]]],
+            [[0, 80, 3], [3, 77, 1], [4, 75, 2], [6, 77, 2], [8, 80, 6], [14, 84, 2]], [[0, 82, 4], [4, 79, 2], [6, 76, 6], [12, 77, 4]],
+            [[0, 80, 3], [3, 77, 1], [4, 73, 4], [10, 72, 2], [12, 77, 4]], [[0, 79, 3], [3, 75, 1], [4, 72, 2], [6, 75, 2], [8, 79, 6], [14, 82, 2]],
+            [[0, 77, 3], [3, 73, 1], [4, 70, 6], [12, 73, 4]], [[0, 76, 4], [4, 73, 2], [6, 70, 6], [12, 73, 2], [14, 76, 2]]],
   };
   function boombapBar(i, L, f) {
-    const { ev, add: raw } = mk(), k = i % 4;
+    const { ev, add: raw } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S;
     const sw = (C2.BOOMBAP_SWING - 50) / 50;                       // odd-16th delay, in steps
     const add = (s, v, p, drum) => raw(Math.max(0, s + ((Math.round(s * 4) % 8) === 4 ? sw : 0) + hum(drum, 0.03)), v, Object.assign({}, p, p && p.vel != null ? { vel: p.vel * (1 + hum(drum, 0.08)) } : {}));
     if (f.enter) add(0, 'crash', { vel: 0.8 });
     if (C2.VINYL_CRACKLE) raw(0, 'crackle', { dur: 16, vel: L === 1 ? 1 : 0.7 });
     // kick: heavy on 1, syncopated double kicks
-    const kk = f.fill ? [0, 7] : BB.kick[k];
+    const kk = f.fill ? [0, 7] : BB.kick[bi];
     kk.forEach((s) => add(s, 'kick', { vel: s === 0 ? 1.2 : 0.95, hi: 120, lo: 48, dec: 0.42 }, true));
     // snare: hard on 2 and 4, slightly late
     add(4.06, 'snareA', { vel: 1 }, true);
@@ -415,107 +444,129 @@ const CHEMBEATS_TRACKS2_CONFIG = {
       add(12, 'scratch', { m: 62, dur: 4, n: 4, vel: 0.9 });
     } else add(12.06, 'snareA', { vel: 1 }, true);
     // ghost snares + rimshots (L3+)
-    if (L >= 3 && !f.fill) { add(7, 'snareA', { vel: 0.18, dec: 0.08, verb: 0 }, true); add(15, 'snareA', { vel: 0.22, dec: 0.08, verb: 0 }, true); add(k % 2 ? 9 : 3, 'rim', { vel: 0.9 }, true); }
+    if (L >= 3 && !f.fill) { add(S ? 6 : 7, 'snareA', { vel: 0.18, dec: 0.08, verb: 0 }, true); add(15, 'snareA', { vel: 0.22, dec: 0.08, verb: 0 }, true); add((k % 2 === 1) !== (S === 1) ? 9 : 3, 'rim', { vel: 0.9 }, true); }
     // hats: swung 8ths at L2, swung 16ths at L3+, open hat at L4
     if (L >= 2) for (let s = 0; s < (f.fill ? 8 : 16); s += (L >= 3 ? 1 : 2)) add(s, 'hat', { vel: s % 4 === 2 ? 0.8 : (s % 2 ? 0.4 : 0.62), pan: 0.25 }, true);
-    if (L >= 4 && !f.fill) add(14, 'hat', { open: true, vel: 0.4 }, true);
+    if (L >= 4 && !f.fill) add(S ? 10 : 14, 'hat', { open: true, vel: 0.4 }, true);
     if (L >= 3 && !f.fill) for (let s = 0; s < 16; s += 2) add(s + 1, 'shaker', { vel: 0.3 }, true);
     // keys: Rhodes chord on 1, re-hit on 2a (swung)
-    add(0, 'rhodes', { ms: BB.ch[k], dur: 9, vel: L === 1 ? 1 : 0.85 });
-    if (!f.fill) add(10, 'rhodes', { ms: BB.ch[k], dur: 5, vel: 0.6 });
+    add(0, 'rhodes', { ms: BB.ch[bi], dur: 9, vel: L === 1 ? 1 : 0.85 });
+    if (!f.fill) add(S ? 11 : 10, 'rhodes', { ms: BB.ch[bi], dur: S ? 4 : 5, vel: 0.6 });
     // bass (L2+)
-    if (L === 1) add(0, 'upbass', { m: BB.roots[k], dur: 8, vel: 0.8 });
-    else BB.bass[k].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'upbass', { m, dur: d }); });
+    if (L === 1) add(0, 'upbass', { m: BB.roots[bi], dur: 8, vel: 0.8 });
+    else BB.bass[bi].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'upbass', { m, dur: d }); });
     // flute line (L3+)
-    if (L >= 3) BB.flute[k].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'flute', { m, dur: d, vel: L >= 4 ? 0.85 : 1 }); });
+    if (L >= 3) BB.flute[bi].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'flute', { m, dur: d, vel: L >= 4 ? 0.85 : 1 }); });
     // scratches (L4)
-    if (L >= 4 && !f.fill && k === 3) { add(12, 'scratch', { m: 60, dur: 2, n: 2 }); add(14, 'scratch', { m: 64, dur: 2, n: 3 }); }
-    if (L >= 4 && !f.fill && k === 1) add(14, 'scratch', { m: 58, dur: 2, n: 2, vel: 0.7 });
+    if (L >= 4 && !f.fill && k === 3) { if (S) add(12, 'scratch', { m: 62, dur: 4, n: 4, vel: 0.9 }); else { add(12, 'scratch', { m: 60, dur: 2, n: 2 }); add(14, 'scratch', { m: 64, dur: 2, n: 3 }); } }
+    if (L >= 4 && !f.fill && k === 1) add(S ? 10 : 14, 'scratch', { m: S ? 56 : 58, dur: 2, n: 2, vel: 0.7 });
     return ev;
   }
   CB.addTrack({ id: 'boombap', name: 'Boom-Bap Beaker', bpm: () => C2.BOOMBAP_BPM, filter: [1600, 2400, 3800, 8000], endChord: [56, 60, 63, 67], bar: boombapBar });
   CB.addTrack({ id: 'boombap-up', name: 'Boom-Bap Beaker+', bpm: () => C2.BOOMBAP_UP_BPM, filter: [1600, 2400, 3800, 8000], endChord: [56, 60, 63, 67], bar: boombapBar });
 
   /* ====================== Track 6a: Bayou Bounce (New Orleans bounce) ======================
-     D minor: Dm – Dm – B♭ – C. 808 machine drums, syncopated snare rolls, shakers, congas,
-     analog synth bass, call-and-response vocal chops. */
+     D minor: bars 1-4 Dm – Dm – B♭ – C, bars 5-8 Gm – Gm – F – A. 808 machine drums, syncopated snare rolls,
+     shakers, congas, analog synth bass, call-and-response vocal chops.
+     (Lists have 8 entries: bars 1-4 = A section, bars 5-8 = B section; bar 8 = A major, the "V" back to Dm.) */
   const BO = {
-    roots: [38, 38, 34, 36],
+    roots: [38, 38, 34, 36, 43, 43, 41, 33],
     bass: [[[0, 38, 2], [3, 50, 1], [6, 38, 2], [10, 41, 1], [11, 43, 2], [14, 45, 2]],
            [[0, 38, 2], [3, 50, 1], [6, 38, 2], [10, 45, 1], [11, 43, 2], [14, 41, 2]],
            [[0, 34, 2], [3, 46, 1], [6, 34, 2], [10, 38, 1], [11, 41, 2], [14, 43, 2]],
-           [[0, 36, 2], [3, 48, 1], [6, 36, 2], [10, 40, 1], [11, 43, 2], [14, 48, 2]]],
+           [[0, 36, 2], [3, 48, 1], [6, 36, 2], [10, 40, 1], [11, 43, 2], [14, 48, 2]],
+           [[0, 43, 2], [3, 55, 1], [6, 43, 1], [7, 46, 1], [10, 50, 1], [11, 48, 2], [14, 46, 2]],
+           [[0, 43, 2], [3, 55, 1], [6, 43, 2], [10, 50, 1], [11, 48, 2], [14, 46, 2]],
+           [[0, 41, 2], [3, 53, 1], [6, 41, 2], [10, 45, 1], [11, 48, 2], [14, 50, 2]],
+           [[0, 33, 2], [3, 45, 1], [6, 33, 2], [10, 37, 1], [11, 40, 2], [14, 45, 2]]],
     hook: [[[0, 81], [2, 79], [3, 77], [6, 74], [8, 77], [10, 79], [11, 77], [14, 74]],
            [[0, 81], [2, 79], [3, 77], [6, 74], [8, 72], [10, 74], [12, 77]],
            [[0, 82], [2, 81], [3, 77], [6, 74], [8, 77], [10, 82], [12, 81], [14, 77]],
-           [[0, 79], [2, 77], [3, 76], [6, 72], [8, 76], [10, 79], [12, 84]]],
+           [[0, 79], [2, 77], [3, 76], [6, 72], [8, 76], [10, 79], [12, 84]],
+           [[0, 82], [2, 81], [3, 79], [6, 74], [8, 79], [10, 82], [11, 79], [14, 77]],
+           [[0, 79], [2, 81], [3, 82], [6, 86], [8, 82], [10, 81], [12, 79]],
+           [[0, 84], [2, 81], [3, 79], [6, 77], [8, 81], [10, 84], [12, 86], [14, 84]],
+           [[0, 85], [2, 81], [3, 79], [6, 76], [8, 79], [10, 81], [12, 85], [14, 81]]],
     congas: [[0, 330, 1], [3, 220], [6, 220], [7, 330, 1], [10, 220], [12, 330, 1], [14, 220], [15, 260]],
+    congasB: [[0, 330, 1], [3, 220], [5, 260], [7, 330, 1], [9, 220], [11, 220], [12, 330, 1], [15, 260]],
   };
   CB.addTrack({
     id: 'bounce', name: 'Bayou Bounce', bpm: () => C2.BOUNCE_BPM, filter: [1400, 2600, 6000, 14000], endChord: [62, 65, 69],
     bar(i, L, f) {
-      const { ev, add } = mk(), k = i % 4, roll = roller(add);
+      const { ev, add } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, roll = roller(add);
       if (f.enter) { add(0, 'crash', { vel: 0.9 }); add(0, 'kick', { vel: 1.2, hi: 110, lo: 42, dec: 0.6 }); }
       // 808-machine kick (boomy) + snare on 2 and 4, syncopated extras
-      (f.fill ? [0, 7] : [0, 7, 10]).forEach((s) => add(s, 'kick', { vel: 1.1, hi: 110, lo: 42, dec: 0.5 }));
+      (f.fill ? [0, 7] : (S ? (k % 2 ? [0, 7, 10, 14] : [0, 6, 10]) : [0, 7, 10])).forEach((s) => add(s, 'kick', { vel: 1.1, hi: 110, lo: 42, dec: 0.5 }));
       add(4, 'snare', { vel: 0.9, pitch: 230, dec: 0.18 }); add(4, 'clap', { vel: 0.7 });
       if (f.fill) {
         roll(8, 8, 2, 0, 0, 0.9, 'snare', { dec: 0.07 });                           // classic bounce 1/32 snare roll
         [8, 10, 12, 14].forEach((s, j) => add(s, 'tom', { f: 200 - j * 30 }));
       } else {
         add(12, 'snare', { vel: 0.9, pitch: 230, dec: 0.18 }); add(12, 'clap', { vel: 0.7 });
-        if (L >= 2) { add(k % 2 ? 15 : 6, 'snare', { vel: 0.45, pitch: 240, dec: 0.1 }); if (k === 3) add(14, 'snare', { vel: 0.5, dec: 0.1 }); }
-        if (L >= 3 && k === 1) roll(13, 3, 1.5, 0, 0, 0.7, 'snare', { dec: 0.07 });   // 16th-triplet roll into beat 1
-        if (L >= 3 && k === 3) roll(12, 4, 1, 0, 0, 0.75, 'snare', { dec: 0.08 });
+        if (L >= 2) { add((k % 2 === 1) !== (S === 1) ? 15 : 6, 'snare', { vel: 0.45, pitch: 240, dec: 0.1 }); if (k === 3) add(14, 'snare', { vel: 0.5, dec: 0.1 }); }
+        const kr = S ? 0 : 1;                                                         // bar with the short triplet roll (B section: bar 5)
+        if (L >= 3 && k === kr) roll(13, 3, 1.5, 0, 0, 0.7, 'snare', { dec: 0.07 });   // 16th-triplet roll into beat 1
+        if (L >= 3 && k === 3) { if (S) roll(10, 6, 1.5, 0, 0, 0.7, 'snare', { dec: 0.07 }); else roll(12, 4, 1, 0, 0, 0.75, 'snare', { dec: 0.08 }); }
         if (L >= 4 && k === 3) [13, 14, 15].forEach((s, j) => add(s, 'tom', { f: 190 - j * 35, vel: 0.6 }));
-        if (L >= 4 && k === 1) roll(8, 1, 3, 0, 0, 0.5, 'snare', { dec: 0.05 });
+        if (L >= 4 && k === kr) roll(8, 1, 3, 0, 0, 0.5, 'snare', { dec: 0.05 });
       }
       // hats 8ths (L1) → 16ths (L3); shaker 16ths (L2+); cowbell + congas (L3+)
       for (let s = 0; s < (f.fill ? 8 : 16); s += (L >= 3 ? 1 : 2)) add(s, 'hat', { vel: s % 2 ? 0.4 : 0.6 });
       if (L >= 2 && !f.fill) for (let s = 0; s < 16; s++) add(s, 'shaker', { vel: s % 4 === 2 ? 0.55 : 0.3, acc: s % 4 === 2 });
-      if (L >= 3 && !f.fill) { BO.congas.forEach(([s, fr, slap]) => add(s, 'conga', { f: fr, slap: !!slap, vel: 0.8 })); add(k % 2 ? 6 : 2, 'cowbell', { vel: 0.7 }); }
+      if (L >= 3 && !f.fill) { (S ? BO.congasB : BO.congas).forEach(([s, fr, slap]) => add(s, 'conga', { f: fr, slap: !!slap, vel: 0.8 })); add((k % 2 === 1) !== (S === 1) ? 6 : 2, 'cowbell', { vel: 0.7 }); }
       // analog bass
-      if (L === 1) { add(0, 'synbass', { m: BO.roots[k], dur: 3 }); add(8, 'synbass', { m: BO.roots[k], dur: 3 }); }
-      else BO.bass[k].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'synbass', { m, dur: d, q: 6 }); });
+      if (L === 1) { add(0, 'synbass', { m: BO.roots[bi], dur: 3 }); add(8, 'synbass', { m: BO.roots[bi], dur: 3 }); }
+      else BO.bass[bi].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'synbass', { m, dur: d, q: 6 }); });
       // synth hook (L3+), octave-up double at L4
-      if (L >= 3) BO.hook[k].forEach(([s, m], j, a) => {
+      if (L >= 3) BO.hook[bi].forEach(([s, m], j, a) => {
         if (f.fill && s >= 8) return;
         const d = (j + 1 < a.length ? a[j + 1][0] : 16) - s;
         add(s, 'whistle', { m, dur: d * 0.8, from: j ? a[j - 1][1] : null });
         if (L >= 4) add(s, 'whistle', { m: m + 12, dur: d * 0.6, vel: 0.35 });
       });
-      else add(0, 'stab', { ms: [BO.roots[k] + 24, BO.roots[k] + 27 + (k >= 2 ? 1 : 0), BO.roots[k] + 31], dur: 2 });
+      else add(0, 'stab', { ms: [BO.roots[bi] + 24, BO.roots[bi] + 27 + (k >= 2 ? 1 : 0), BO.roots[bi] + 31], dur: 2 });
       // call-and-response chops (L4)
-      if (L >= 4 && !f.fill) { add(6, 'vox', { m: 62, vow: 'eh', dur: 1.5 }); add(14, 'vox', { m: k % 2 ? 65 : 62, vow: 'ah', dur: 1.5 }); }
+      if (L >= 4 && !f.fill) { add(6, 'vox', { m: S ? 67 : 62, vow: 'eh', dur: 1.5 }); add(14, 'vox', { m: S ? (k % 2 ? 70 : 67) : (k % 2 ? 65 : 62), vow: 'ah', dur: 1.5 }); }
       return ev;
     },
   });
 
   /* ================= Track 6b: Stutter Catalyst (Neptunes / Timbaland style) =================
-     E dorian: Em7 – A9 – Em7 – Cmaj9. Sparse syncopation, triplet stutter kicks, beatbox kit,
-     clav riff, squelchy analog bass, Neptunes-style 4-count claps at level 4. */
+     E dorian: bars 1-4 Em7 – A9 – Em7 – Cmaj9, bars 5-8 Gmaj7 – Bm7 – A9 – B7. Sparse syncopation,
+     triplet stutter kicks, beatbox kit, clav riff, squelchy analog bass, Neptunes-style 4-count claps at level 4.
+     (Lists have 8 entries: bars 1-4 = A section, bars 5-8 = B section; bar 8 = B7, the "V" back to Em.) */
   const ST = {
-    roots: [40, 45, 40, 36],
-    ch: [[62, 64, 67, 71], [61, 64, 67, 71], [62, 64, 67, 71], [59, 64, 67, 71]],
+    roots: [40, 45, 40, 36, 43, 47, 45, 47],
+    ch: [[62, 64, 67, 71], [61, 64, 67, 71], [62, 64, 67, 71], [59, 64, 67, 71], [62, 66, 67, 71], [62, 66, 69, 71], [61, 64, 67, 71], [63, 66, 69, 71]],
     clav: [[[0, 64], [3, 64], [5, 67], [6, 69], [8, 64], [11, 71], [12, 69], [14, 67]],
            [[0, 69], [3, 69], [5, 73], [6, 71], [8, 69], [11, 67], [12, 64], [14, 67]],
            [[0, 64], [3, 64], [5, 67], [6, 69], [8, 71], [10, 74], [11, 71], [14, 69]],
-           [[0, 64], [2, 67], [3, 71], [6, 72], [8, 71], [10, 67], [11, 64], [14, 62]]],
+           [[0, 64], [2, 67], [3, 71], [6, 72], [8, 71], [10, 67], [11, 64], [14, 62]],
+           [[0, 71], [2, 71], [5, 69], [6, 67], [8, 66], [11, 67], [12, 71], [14, 74]],
+           [[0, 69], [3, 66], [5, 69], [6, 71], [8, 74], [11, 71], [12, 69], [14, 66]],
+           [[0, 69], [3, 73], [5, 76], [6, 73], [8, 71], [10, 67], [11, 69], [14, 73]],
+           [[0, 71], [2, 75], [3, 78], [6, 75], [8, 69], [10, 66], [11, 69], [14, 71]]],
     bass: [[[0, 40, 3], [6, 40, 1], [7, 43, 2], [10, 45, 2], [14, 47, 1]],
            [[0, 45, 3], [6, 45, 1], [7, 43, 2], [10, 40, 2], [13, 43, 2]],
            [[0, 40, 3], [6, 40, 1], [7, 43, 2], [10, 45, 2], [14, 50, 1]],
-           [[0, 36, 3], [6, 36, 1], [7, 40, 2], [10, 43, 2], [14, 47, 2]]],
-    kicks: [[0, 7, 10], [0, 7, 10, 13.33, 14.67], [0, 3, 7, 10], [0, 7, 9.33, 10.67, 14]],
+           [[0, 36, 3], [6, 36, 1], [7, 40, 2], [10, 43, 2], [14, 47, 2]],
+           [[0, 43, 3], [6, 43, 1], [7, 47, 2], [10, 50, 2], [14, 42, 1]],
+           [[0, 47, 3], [6, 47, 1], [7, 50, 2], [10, 54, 2], [14, 45, 1]],
+           [[0, 45, 3], [6, 45, 1], [7, 49, 2], [10, 52, 2], [14, 43, 1]],
+           [[0, 47, 3], [6, 47, 1], [7, 51, 2], [10, 54, 2], [14, 50, 2]]],
+    kicks: [[0, 7, 10], [0, 7, 10, 13.33, 14.67], [0, 3, 7, 10], [0, 7, 9.33, 10.67, 14],
+            [0, 7, 10, 12], [0, 3, 7, 10], [0, 7, 9.33, 10.67, 14], [0, 7, 10, 12, 13.33, 14.67]],
     bongo: [[2, 400], [3, 300], [6, 400, 1], [9, 300], [11, 400], [13, 300, 1], [14, 400]],
+    bongoB: [[1, 300], [3, 400], [6, 300, 1], [8, 400], [10, 300], [12, 400, 1], [15, 300]],
   };
   CB.addTrack({
     id: 'stutter', name: 'Stutter Catalyst', bpm: () => C2.STUTTER_BPM, filter: [1500, 2800, 6500, 14000], endChord: [64, 67, 71, 74],
     bar(i, L, f) {
-      const { ev, add: raw } = mk(), k = i % 4, roll = roller(raw);
+      const { ev, add: raw } = mk(), k = i % 4, S = sec(i), bi = k + 4 * S, roll = roller(raw);
       const add = (s, v, p, h) => raw(Math.max(0, s + hum(h, 0.025)), v, p);
       if (f.enter) { add(0, 'crash', { vel: 0.7 }); add(0, 'bb', { k: 'b', vel: 1.2 }); }
       // kicks: plain at L1–2, triplet stutters at L3+
-      let kk = L >= 3 ? ST.kicks[k] : [0, 7, 10];
+      let kk = L >= 3 ? ST.kicks[bi] : (S ? [0, 6, 10] : [0, 7, 10]);
       if (f.fill) kk = [0, 7];
       kk.forEach((s) => { add(s, 'kick', { vel: s % 1 ? 0.75 : 1, hi: 140, lo: 50, dec: 0.22 }); if (s === 0) add(s, 'bb', { k: 'b', vel: 0.6 }); });
       // backbeat: rim + beatbox snare
@@ -527,20 +578,20 @@ const CHEMBEATS_TRACKS2_CONFIG = {
       if (L >= 4 && !f.fill) [0, 4, 8, 12].forEach((s) => add(s, 'clap', { vel: s % 8 ? 0.8 : 0.55, dec: 0.12 }));   // 4-count claps
       // beatbox "ts" hats: 8ths, then 16ths; 16th-triplet stutters at L4
       const busy = [];
-      if (L >= 4 && !f.fill && k % 2 === 1) { roll(12, 4, 1.5, 0, 0, 0.6, 'bb', { k: 'ts' }); busy.push([12, 16]); }
+      if (L >= 4 && !f.fill && k % 2 === 1) { const r0 = S ? 10 : 12; roll(r0, 16 - r0, 1.5, 0, 0, 0.6, 'bb', { k: 'ts' }); busy.push([r0, 16]); }
       for (let s = 0; s < (f.fill ? 8 : 16); s += (L >= 3 ? 1 : 2)) if (!busy.some(([a, b]) => s >= a && s < b)) add(s, 'bb', { k: 'ts', vel: s % 4 === 2 ? 0.75 : 0.4, long: s % 8 === 6, pan: s % 2 ? -0.25 : 0.25 }, true);
       // bongos (L2+)
-      if (L >= 2 && !f.fill) ST.bongo.forEach(([s, fr, slap]) => add(s, 'conga', { f: fr, slap: !!slap, vel: 0.65, pan: -0.35 }, true));
+      if (L >= 2 && !f.fill) (S ? ST.bongoB : ST.bongo).forEach(([s, fr, slap]) => add(s, 'conga', { f: fr, slap: !!slap, vel: 0.65, pan: -0.35 }, true));
       // bass (L2+)
-      if (L === 1) add(0, 'synbass', { m: ST.roots[k], dur: 4, q: 9, open: 1600 });
-      else ST.bass[k].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'synbass', { m, dur: d, q: 10, open: 2800 }); });
+      if (L === 1) add(0, 'synbass', { m: ST.roots[bi], dur: 4, q: 9, open: 1600 });
+      else ST.bass[bi].forEach(([s, m, d]) => { if (!(f.fill && s >= 8)) add(s, 'synbass', { m, dur: d, q: 10, open: 2800 }); });
       // clav: sparse at L1–2, full riff at L3+
-      if (L <= 2) [[0, 3], [6, 1], [10, 2]].forEach(([s, d]) => { if (!(f.fill && s >= 8)) add(s, 'clav', { ms: ST.ch[k], dur: d * 0.9, vel: 0.7 }); });
-      else ST.clav[k].forEach(([s, m]) => { if (!(f.fill && s >= 8)) add(s, 'clav', { m, vel: 1 }); });
+      if (L <= 2) [[0, 3], [6, 1], [10, 2]].forEach(([s, d]) => { if (!(f.fill && s >= 8)) add(s, 'clav', { ms: ST.ch[bi], dur: d * 0.9, vel: 0.7 }); });
+      else ST.clav[bi].forEach(([s, m]) => { if (!(f.fill && s >= 8)) add(s, 'clav', { m, vel: 1 }); });
       // stabs + vocal chops (L4)
       if (L >= 4 && !f.fill) {
-        add(7, 'stab', { ms: ST.ch[k], dur: 1 }); add(15, 'stab', { ms: ST.ch[k], dur: 1, vel: 0.7 });
-        [[2, 'ee', 76], [10, 'oh', 71]].forEach(([s, vow, m]) => add(s, 'vox', { m: m - 12, vow, dur: 1.5, vel: 0.7 }));
+        add(S ? 6 : 7, 'stab', { ms: ST.ch[bi], dur: 1 }); add(S ? 13 : 15, 'stab', { ms: ST.ch[bi], dur: 1, vel: 0.7 });
+        (S ? [[3, 'oh', 74], [11, 'ee', 79]] : [[2, 'ee', 76], [10, 'oh', 71]]).forEach(([s, vow, m]) => add(s, 'vox', { m: m - 12, vow, dur: 1.5, vel: 0.7 }));
       }
       return ev;
     },
